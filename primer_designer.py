@@ -26,10 +26,10 @@ FLANK              = 250
 NR_PRIMERS         = 4
 ALLOWED_MISMATCHES = 4
 
-VERBOSE    =  2
+VERBOSE    =  3
 
 def verbose_print( msg, level ):
-    if ( level >= VERBOSE ):
+    if ( level <= VERBOSE ):
         print msg
 
 def fetch_region( chr, start, end ):
@@ -234,7 +234,7 @@ def run_primer3( seq_id, seq, primer3_file = ""):
     cmd = "/software/bin/primer3_core -strict_tags < " + primer3_file
 
 
-    print cmd
+#    print cmd
     args = shlex.split( cmd )
     process = subprocess.Popen(cmd,
                                stdout=subprocess.PIPE,
@@ -283,9 +283,10 @@ def check_primers( region_id, target_region, primer3_dict ):
     primerfasta.close()
 
     smalt_results = region_id + ".smalt"
-    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results
+    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results + " 2> /dev/null"
+#    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results 
 
-    print cmd
+#    print cmd
     subprocess.call(cmd, shell=True)
 
     id_word = "FULLSEQ"
@@ -344,8 +345,8 @@ def check_primers( region_id, target_region, primer3_dict ):
             del (res[ primer ])
 
 
-    pp.pprint( smalt_report)
-    pp.pprint( res )
+#    pp.pprint( smalt_report)
+#    pp.pprint( res )
 
 
     return res
@@ -377,11 +378,11 @@ def align_primers_to_seq( seq, all_primers):
     primers = []
     rev_primers = []
     for primer in all_primers:
-        print primer
+#        print primer
         primers.append(  primer )
         rev_primers.append( revDNA( primer ))
 
-    pp.pprint( primers )
+#    pp.pprint( primers )
 
     mappings = []
 
@@ -389,14 +390,14 @@ def align_primers_to_seq( seq, all_primers):
         for primer in primers:
             primer_len = len(primer)
             if ("".join(seq[i:i+primer_len]) == primer ):
-                print primer + " Matches at pos " + str( i )
+#                print primer + " Matches at pos " + str( i )
 
                 mappings.append( [primer, i, 0] )
 
         for primer in rev_primers:
             primer_len = len(primer)
             if ("".join(seq[i:i+primer_len]) == primer ):
-                print primer + " Matches at pos " + str( i ) + " minus! "
+#                print primer + " Matches at pos " + str( i ) + " minus! "
 
                 mappings.append( [primer, i, 1] )
 
