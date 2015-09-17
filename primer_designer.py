@@ -260,34 +260,39 @@ def run_primer3( seq_id, seq, primer3_file = ""):
 
 
 
-def check_primers( region_id, target_region, primer3_dict ):
+def check_primers( region_id, target_region, primer3_dict, smalt_file = None ):
     verbose_print( "check_primers", 3)
 
+    if ( smalt_file is not None ):
 
-    primers_file = region_id + "_p3seq.fasta"
+        primers_file = region_id + "_p3seq.fasta"
 
-    with open( primers_file, 'w+') as primerfasta:
+        with open( primers_file, 'w+') as primerfasta:
 
-        primerfasta.write(">FULLSEQ\n" + target_region + "\n")
+            primerfasta.write(">FULLSEQ\n" + target_region + "\n")
 
-        for i in range(0, 5):
-            pl_id = "PRIMER_LEFT_%d_SEQUENCE" % i
-            pr_id = "PRIMER_RIGHT_%d_SEQUENCE" % i
+            for i in range(0, 5):
+                pl_id = "PRIMER_LEFT_%d_SEQUENCE" % i
+                pr_id = "PRIMER_RIGHT_%d_SEQUENCE" % i
 
-            if ( pr_id not in primer3_dict or pl_id not in primer3_dict):
-                continue
+                if ( pr_id not in primer3_dict or pl_id not in primer3_dict):
+                    continue
 
-            primerfasta.write(">%s\n%s\n" % (pl_id, primer3_dict[ pl_id ]))
-            primerfasta.write(">%s\n%s\n" % (pr_id, primer3_dict[ pr_id ]))
+                primerfasta.write(">%s\n%s\n" % (pl_id, primer3_dict[ pl_id ]))
+                primerfasta.write(">%s\n%s\n" % (pr_id, primer3_dict[ pr_id ]))
 
-    primerfasta.close()
+        primerfasta.close()
 
-    smalt_results = region_id + ".smalt"
-    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results + " 2> /dev/null"
-#    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results 
+        smalt_results = region_id + ".smalt"
+        cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results + " 2> /dev/null"
+        cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results 
 
 #    print cmd
-    subprocess.call(cmd, shell=True)
+        subprocess.call(cmd, shell=True)
+
+
+    else:
+        smalt_results = smalt_file
 
     id_word = "FULLSEQ"
     match = {}
@@ -479,6 +484,93 @@ def tag_sequence( chr, pos, flank, sequence):
 
 
 
+def check_if_primer_clash( mapped_list, start, end):
+    
+    verbose_print( "check_if_primers_clash", 3)
+    for i in range (start, end):
+        if (mapped_list[ i ]  != " "):
+            return True 
+
+    return False
+
+
+def extract_passed_primer_seqs( primer3_results, passed_primers):
+    
+    verbose_print( "extract_passed_primer_seqs", 3)
+
+    primer_seqs = []
+    for primer in passed_primers:
+        if ( primer == 'FULLSEQ'):
+            continue
+
+        primer_seqs.append( primer3_results[ primer ] )
+
+
+    return primer_seqs
+
+def make_primer_mapped_strings( target_sequence, passed_primer_seqss):
+
+    verbose_print( "make_primer_mapped_strings", 3)
+
+    
+
+    mappings = align_primers_to_seq(target_sequence, passed_primer_seqs )
+    mapped_string = []
+    mapped_string.append( [" "]*len( target_sequence ) )
+
+    for mapping in mappings:
+        ( primer, pos, strand ) = mapping
+
+        mapping_index = 0
+
+        if ( strand == 1 ):
+            primer = revDNA( primer )
+            primer = "<" + primer + "<"
+        else:
+            primer = ">" + primer +">"
+
+        pos -= 1
+
+        primer = list( primer )
+
+        scan_index = 0
+        while( 1 ):
+            if (check_if_primer_clash ( mapped_string[ scan_index ], pos, pos + len( primer ))):
+
+
+                print "increasing scan_index by one " + str( scan_index )
+                import time
+                time.sleep( 1 )
+                scan_index += 1
+
+                if (len( mapped_string ) >= scan_index ):
+                    mapped_string.append([" "]*len( target_sequence ))
+
+            else:
+                break
+
+
+        mapping_index = scan_index 
+
+
+
+        for i in range(0, len( primer)):
+            mapped_string[ mapping_index] [ pos + i ] = primer[ i ]
+
+
+
+    print "Mapped string(s) "
+    pp.pprint( mapped_string )
+
+    for tagged_position in tagged_positions:
+        mapped_string[ mapping_index ][ int( tagged_position) ] = 'X'
+
+
+    mapped_string[0][ FLANK ] = '*'
+    mapped_string = "".join( mapped_string )
+
+
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #
@@ -500,48 +592,13 @@ target_sequence                     =   fetch_region( chr, pos - FLANK, pos + FL
 (tagged_sequence, tagged_positions) =   tag_sequence( chr, pos, FLANK, target_sequence  )
 
 primer3_results  = run_primer3( region_id , tagged_sequence, "%s_%d.primer3" % ( chr, pos))
-passed_primers   = check_primers( region_id, target_sequence, primer3_results)
+passed_primers   = check_primers( region_id, target_sequence, primer3_results, '3:12393125.smalt')
+passed_primer_seqs = extract_passed_primer_seqs( primer3_results, passed_primers )
 
 
-primer_seqs = []
-for primer in passed_primers:
-    if ( primer == 'FULLSEQ'):
-        continue
-
-    primer_seqs.append( primer3_results[ primer ])
-
-
-
-#print pp.pprint( primer_seqs )
-
-mappings = align_primers_to_seq(target_sequence, primer_seqs )
-mapped_string = [" "]*len( target_sequence )
-
-for mapping in mappings:
-    ( primer, pos, strand ) = mapping
-
-    if ( strand == 1 ):
-        primer = revDNA( primer )
-        primer = "<" + primer + "<"
-    else:
-        primer = ">" + primer +">"
-
-    pos -= 1
-
-    primer = list( primer )
-
-
-    for i in range(0, len( primer)):
-        mapped_string[ pos + i ] = primer[ i ]
-
-for tagged_position in tagged_positions:
-    mapped_string[ int( tagged_position) ] = 'X'
-
-
-mapped_string[ FLANK ] = '*'
-mapped_string = "".join( mapped_string )
+make_primer_mapped_strings( target_sequence, passed_primer_seqs)
                         
 #pp.pprint( tagged_positions )
 
-print  target_sequence 
-print  mapped_string 
+#print  target_sequence 
+#print  mapped_string 
