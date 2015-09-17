@@ -439,7 +439,6 @@ def markup_sequence( chr, pos, flank, sequence):
 
     # Tag the target sequence, regardless of the nature of the variant only one (1) base is tagged as the target.
     sequence[ flank ] = ' [' + target_sequence [ flank ] + '] '
-    mask[ flank ] = "*"
 
     dbSNPs = fetch_known_SNPs( '/software/dev/projects/local_dbsnp/test.tab.gz', chr, pos - flank, pos + flank )
 
@@ -522,8 +521,8 @@ def make_primer_mapped_strings( target_sequence, passed_primer_seqss):
     
 
     mappings = align_primers_to_seq(target_sequence, passed_primer_seqs )
-    mapped_string = []
-    mapped_string.append( [" "]*len( target_sequence ) )
+    mapped_strings = []
+    mapped_strings.append( [" "]*len( target_sequence ) )
 
     for mapping in mappings:
         ( primer, pos, strand ) = mapping
@@ -542,7 +541,7 @@ def make_primer_mapped_strings( target_sequence, passed_primer_seqss):
 
         scan_index = 0
         while( 1 ):
-            if (check_if_primer_clash ( mapped_string[ scan_index ], pos, pos + len( primer ))):
+            if (check_if_primer_clash ( mapped_strings[ scan_index ], pos, pos + len( primer ))):
 
 
                 print "increasing scan_index by one " + str( scan_index )
@@ -550,8 +549,8 @@ def make_primer_mapped_strings( target_sequence, passed_primer_seqss):
                 time.sleep( 1 )
                 scan_index += 1
 
-                if (len( mapped_string ) >= scan_index ):
-                    mapped_string.append([" "]*len( target_sequence ))
+                if (len( mapped_strings ) >= scan_index ):
+                    mapped_strings.append([" "]*len( target_sequence ))
 
             else:
                 break
@@ -559,16 +558,28 @@ def make_primer_mapped_strings( target_sequence, passed_primer_seqss):
 
         mapping_index = scan_index 
 
-
-
         for i in range(0, len( primer)):
-            mapped_string[ mapping_index] [ pos + i ] = primer[ i ]
+            mapped_strings[ mapping_index] [ pos + i ] = primer[ i ]
 
 
 
-    print "Mapped string(s) "
-    pp.pprint( mapped_string )
+    for i in range(0, len(mapped_strings)):
+        mapped_strings[ i ] = "".join( mapped_strings[ i ])
 
+    return mapped_strings
+
+
+def pretty_print_mappings( target_sequence, tagged_string, primer_strings, base1):
+    
+    for i in range(0, len(tagged_sequence), 80):
+
+        print "%-9d  %s" % ( base1+ i, target_sequence[i: i+80])
+        print "           " + tagged_string[i: i+80]
+
+        for primer_string in ( primer_strings ):
+            print "           " + primer_string[i: i+80]
+
+        print ""
 
 
 
@@ -591,17 +602,22 @@ region_id = "%s:%d" % ( chr, pos)
 target_sequence                   =   fetch_region( chr, pos - FLANK, pos + FLANK     )
 (tagged_sequence, tagged_string)  =   markup_sequence( chr, pos, FLANK, target_sequence  )
 
-print tagged_sequence
-print tagged_string
-exit()
 
 primer3_results  = run_primer3( region_id , tagged_sequence, "%s_%d.primer3" % ( chr, pos))
 passed_primers   = check_primers( region_id, target_sequence, primer3_results, '3:12393125.smalt')
 passed_primer_seqs = extract_passed_primer_seqs( primer3_results, passed_primers )
 
 
-make_primer_mapped_strings( target_sequence, passed_primer_seqs)
-                        
+mapped_primer_strings = make_primer_mapped_strings( target_sequence, passed_primer_seqs)
+
+
+pretty_print_mappings( target_sequence, tagged_string, mapped_primer_strings, pos - FLANK)
+
+#print tagged_sequence
+#print tagged_string
+
+#for mapped_primer_string in mapped_primer_strings:
+#    print mapped_primer_string
 #pp.pprint( tagged_positions )
 
 #print  target_sequence 
