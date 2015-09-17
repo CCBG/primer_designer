@@ -402,7 +402,7 @@ def align_primers_to_seq( seq, all_primers):
         for primer in rev_primers:
             primer_len = len(primer)
             if ("".join(seq[i:i+primer_len]) == primer ):
-#                print primer + " Matches at pos " + str( i ) + " minus! "
+                print primer + " Matches at pos " + str( i ) + " minus! "
 
                 mappings.append( [primer, i, 1] )
 
