@@ -429,11 +429,13 @@ def get_and_parse_arguments():
 
 
 
-def tag_sequence( chr, pos, flank, sequence):
+def markup_sequence( chr, pos, flank, sequence):
     verbose_print( "tag_sequence", 3)
 
     sequence = list(sequence)
-    mask = [" "] * len( target_sequence )
+    tags = [" "] * len( target_sequence )
+    # Our target base
+    tags[ FLANK ] = '*'
 
     # Tag the target sequence, regardless of the nature of the variant only one (1) base is tagged as the target.
     sequence[ flank ] = ' [' + target_sequence [ flank ] + '] '
@@ -467,7 +469,7 @@ def tag_sequence( chr, pos, flank, sequence):
                     continue
 
                 sequence[ mask_pos + i  ] = ' <' + sequence[ mask_pos + i ] + '> '
-                masked_positions.append( mask_pos + i )
+                tags[  mask_pos + i  ] = 'X'
 
             else:
 #        target_sequence[ snp_pos - pos + 1  ] = ' {' + target_sequence[ snp_pos - pos + 1  ] + '} '
@@ -480,7 +482,12 @@ def tag_sequence( chr, pos, flank, sequence):
     sequence =  "".join( sequence )
     sequence = re.sub(' ', '', sequence)
 
-    return ( sequence, masked_positions )
+
+
+    tagged_string = "".join( tags )
+
+
+    return ( sequence, tagged_string  )
 
 
 
@@ -562,13 +569,6 @@ def make_primer_mapped_strings( target_sequence, passed_primer_seqss):
     print "Mapped string(s) "
     pp.pprint( mapped_string )
 
-    for tagged_position in tagged_positions:
-        mapped_string[ mapping_index ][ int( tagged_position) ] = 'X'
-
-
-    mapped_string[0][ FLANK ] = '*'
-    mapped_string = "".join( mapped_string )
-
 
 
 
@@ -588,8 +588,12 @@ FLANK = int( FLANK )
 
 region_id = "%s:%d" % ( chr, pos)
 
-target_sequence                     =   fetch_region( chr, pos - FLANK, pos + FLANK     )
-(tagged_sequence, tagged_positions) =   tag_sequence( chr, pos, FLANK, target_sequence  )
+target_sequence                   =   fetch_region( chr, pos - FLANK, pos + FLANK     )
+(tagged_sequence, tagged_string)  =   markup_sequence( chr, pos, FLANK, target_sequence  )
+
+print tagged_sequence
+print tagged_string
+exit()
 
 primer3_results  = run_primer3( region_id , tagged_sequence, "%s_%d.primer3" % ( chr, pos))
 passed_primers   = check_primers( region_id, target_sequence, primer3_results, '3:12393125.smalt')
