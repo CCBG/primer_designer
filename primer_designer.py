@@ -22,7 +22,7 @@ SMALT      = '/software/bin/smalt-0.7.6 '
 PRIMER3    = '/software/bin/primer3_core '
 
 # default parameters, can be overridden by the user (perhaps)
-FLANK              = 250
+FLANK              = 500
 NR_PRIMERS         = 4
 ALLOWED_MISMATCHES = 4
 
@@ -75,7 +75,7 @@ def write_primer3_file(seq_id, seq, primer3_file = ""):
 
     template = '''SEQUENCE_ID={seq_id}
 SEQUENCE_TEMPLATE={seq}
-SEQUENCE_TARGET=251,1
+SEQUENCE_TARGET={flank},1
 PRIMER_FIRST_BASE_INDEX=1
 PRIMER_TASK=generic
 PRIMER_MIN_THREE_PRIME_DISTANCE=3
@@ -207,7 +207,8 @@ PRIMER_THERMODYNAMIC_PARAMETERS_PATH=/software/bin/primer3_config/
 
     details = {
         "seq_id" : seq_id,
-        "seq" : seq
+        "seq"    : seq,
+        "flank"  : FLANK
     }
 
 
@@ -231,10 +232,10 @@ def run_primer3( seq_id, seq, primer3_file = ""):
     write_primer3_file(seq_id, seq, primer3_file)
 
 
-    cmd = "/software/bin/primer3_core -strict_tags < " + primer3_file
+    cmd = PRIMER3 + " < " + primer3_file
 
 
-#    print cmd
+    print cmd
     args = shlex.split( cmd )
     process = subprocess.Popen(cmd,
                                stdout=subprocess.PIPE,
@@ -260,39 +261,35 @@ def run_primer3( seq_id, seq, primer3_file = ""):
 
 
 
-def check_primers( region_id, target_region, primer3_dict, smalt_file = None ):
+def check_primers( region_id, target_region, primer3_dict):
     verbose_print( "check_primers", 3)
 
-    if ( smalt_file is not None ):
 
-        primers_file = region_id + "_p3seq.fasta"
+    primers_file = region_id + "_p3seq.fasta"
 
-        with open( primers_file, 'w+') as primerfasta:
+    with open( primers_file, 'w+') as primerfasta:
 
-            primerfasta.write(">FULLSEQ\n" + target_region + "\n")
+        primerfasta.write(">FULLSEQ\n" + target_region + "\n")
 
-            for i in range(0, 5):
-                pl_id = "PRIMER_LEFT_%d_SEQUENCE" % i
-                pr_id = "PRIMER_RIGHT_%d_SEQUENCE" % i
+        for i in range(0, 5):
+            pl_id = "PRIMER_LEFT_%d_SEQUENCE" % i
+            pr_id = "PRIMER_RIGHT_%d_SEQUENCE" % i
 
-                if ( pr_id not in primer3_dict or pl_id not in primer3_dict):
-                    continue
+            if ( pr_id not in primer3_dict or pl_id not in primer3_dict):
+                continue
 
-                primerfasta.write(">%s\n%s\n" % (pl_id, primer3_dict[ pl_id ]))
-                primerfasta.write(">%s\n%s\n" % (pr_id, primer3_dict[ pr_id ]))
+            primerfasta.write(">%s\n%s\n" % (pl_id, primer3_dict[ pl_id ]))
+            primerfasta.write(">%s\n%s\n" % (pr_id, primer3_dict[ pr_id ]))
 
         primerfasta.close()
 
-        smalt_results = region_id + ".smalt"
-        cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results + " 2> /dev/null"
-        cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results 
+    smalt_results = region_id + ".smalt"
+    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results + " 2> /dev/null"
+    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results 
 
-#    print cmd
-        subprocess.call(cmd, shell=True)
+    print cmd
+    subprocess.call(cmd, shell=True)
 
-
-    else:
-        smalt_results = smalt_file
 
     id_word = "FULLSEQ"
     match = {}
@@ -346,7 +343,7 @@ def check_primers( region_id, target_region, primer3_dict, smalt_file = None ):
             continue 
 
         if (len( res[ primer ][ 'CHR' ]) > 1 ):
-            print primer + " matches more than one place in the genome "
+#            print primer + " matches more than one place in the genome "
             del (res[ primer ])
 
 
@@ -382,30 +379,37 @@ def align_primers_to_seq( seq, all_primers):
 
     primers = []
     rev_primers = []
-    for primer in all_primers:
+    for primer_set in all_primers:
+        ( name, primer) = primer_set
 #        print primer
-        primers.append(  primer )
-        rev_primers.append( revDNA( primer ))
+        primers.append(  [name, primer] )
+        rev_primers.append( [name, revDNA( primer )])
 
 #    pp.pprint( primers )
 
     mappings = []
 
     for i in range(0, len(seq)):
-        for primer in primers:
+        for primer_set in primers:
+            (name, primer) = primer_set
             primer_len = len(primer)
             if ("".join(seq[i:i+primer_len]) == primer ):
 #                print primer + " Matches at pos " + str( i )
 
-                mappings.append( [primer, i, 0] )
+#                mappings.append( [primer, i, 0] )
+                mappings.append( [name, primer, i, 0] )
 
-        for primer in rev_primers:
+        for primer_set in rev_primers:
+            (name, primer) = primer_set
             primer_len = len(primer)
             if ("".join(seq[i:i+primer_len]) == primer ):
-                print primer + " Matches at pos " + str( i ) + " minus! "
+#                print primer + " Matches at pos " + str( i ) + " minus! "
 
-                mappings.append( [primer, i, 1] )
+#                mappings.append( [primer, i, 1] )
+                mappings.append( [name, primer, i, 1] )
 
+
+#    pp.pprint( mappings )
 
     return mappings
 
@@ -492,7 +496,7 @@ def markup_sequence( chr, pos, flank, sequence):
 
 def check_if_primer_clash( mapped_list, start, end):
     
-    verbose_print( "check_if_primers_clash", 3)
+    verbose_print( "check_if_primers_clash", 4)
     for i in range (start, end):
         if (mapped_list[ i ]  != " "):
             return True 
@@ -509,33 +513,40 @@ def extract_passed_primer_seqs( primer3_results, passed_primers):
         if ( primer == 'FULLSEQ'):
             continue
 
-        primer_seqs.append( primer3_results[ primer ] )
+        name = primer
+        name = re.sub(r'PRIMER_', '', name)
+        name = re.sub(r'_SEQUENCE', '', name)
+
+        primer_seqs.append( [name, primer3_results[ primer ]] )
 
 
     return primer_seqs
 
-def make_primer_mapped_strings( target_sequence, passed_primer_seqss):
+def make_primer_mapped_strings( target_sequence, passed_primer_seqs):
 
     verbose_print( "make_primer_mapped_strings", 3)
-
-    
 
     mappings = align_primers_to_seq(target_sequence, passed_primer_seqs )
     mapped_strings = []
     mapped_strings.append( [" "]*len( target_sequence ) )
 
     for mapping in mappings:
-        ( primer, pos, strand ) = mapping
+        ( name, primer, pos, strand ) = mapping
 
         mapping_index = 0
 
+        arrows = (len(primer)-len(name)-2)/2
+        arrow_type = ">"
+
         if ( strand == 1 ):
             primer = revDNA( primer )
-            primer = "<" + primer + "<"
-        else:
-            primer = ">" + primer +">"
+            arrow_type = "<"
 
-        pos -= 1
+        tag = arrow_type*arrows + " " + name + " " + arrow_type*arrows
+        if ( len(tag) < len(primer)):
+            tag += arrow_type
+            
+        primer = tag 
 
         primer = list( primer )
 
@@ -544,7 +555,7 @@ def make_primer_mapped_strings( target_sequence, passed_primer_seqss):
             if (check_if_primer_clash ( mapped_strings[ scan_index ], pos, pos + len( primer ))):
 
 
-                print "increasing scan_index by one " + str( scan_index )
+#                print "increasing scan_index by one " + str( scan_index )
                 import time
                 time.sleep( 1 )
                 scan_index += 1
@@ -577,11 +588,57 @@ def pretty_print_mappings( target_sequence, tagged_string, primer_strings, base1
         print "           " + tagged_string[i: i+80]
 
         for primer_string in ( primer_strings ):
-            print "           " + primer_string[i: i+80]
+
+            line =  "           " + primer_string[i: i+80]
+            if ( re.match(r'^ *$', line)):
+                continue
+            print line
 
         print ""
 
 
+    print "Map keys::"
+    print "XXXXXX excluded region"
+    print "****** target"
+    print ">>>>>> left primer"
+    print "<<<<<< right primer"
+
+    print "\n\n"
+
+def pretty_print_primer_data(primer3_results, passed_primers ):
+
+    verbose_print( "extract_passed_primer_seqs", 3)
+
+    print "\n\n\n"
+
+#    pp.pprint( primer3_results )
+
+    print "_-=-"*15 +"_\n"
+
+    print " Primer design report for chr: %s pos: %d\n" % (chr, pos)
+    print "_-=-"*15 +"_\n\n"
+
+    print "\t".join(['ID', '%GC', 'TM', 'Sequence'])
+    print "_-=-"*15 +"_"
+
+    primer_seqs = []
+    for primer in sorted(passed_primers):
+        if ( primer == 'FULLSEQ'):
+            continue
+
+        name = primer
+        name = re.sub(r'PRIMER_', '', name)
+        name = re.sub(r'_SEQUENCE', '', name)
+
+
+        print "\t".join([name, 
+                         primer3_results[ "PRIMER_" + name + "_GC_PERCENT"], 
+                         primer3_results[ "PRIMER_" + name + "_TM"],
+                         primer3_results[ "PRIMER_" + name + "_SEQUENCE"], ])
+
+    print ""
+    print "-="*46
+    print ""
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #
@@ -604,21 +661,14 @@ target_sequence                   =   fetch_region( chr, pos - FLANK, pos + FLAN
 
 
 primer3_results  = run_primer3( region_id , tagged_sequence, "%s_%d.primer3" % ( chr, pos))
-passed_primers   = check_primers( region_id, target_sequence, primer3_results, '3:12393125.smalt')
+passed_primers   = check_primers( region_id, target_sequence, primer3_results)
 passed_primer_seqs = extract_passed_primer_seqs( primer3_results, passed_primers )
 
 
 mapped_primer_strings = make_primer_mapped_strings( target_sequence, passed_primer_seqs)
 
 
+pretty_print_primer_data(primer3_results, passed_primers )
+
 pretty_print_mappings( target_sequence, tagged_string, mapped_primer_strings, pos - FLANK)
 
-#print tagged_sequence
-#print tagged_string
-
-#for mapped_primer_string in mapped_primer_strings:
-#    print mapped_primer_string
-#pp.pprint( tagged_positions )
-
-#print  target_sequence 
-#print  mapped_string 
