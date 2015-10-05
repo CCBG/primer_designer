@@ -14,6 +14,12 @@ import subprocess
 import re
 
 
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+width, height = A4 #keep for later
+
+
+
 # External tools we use 
 SAMTOOLS   = '/software/bin/samtools ';
 REFERENCE  = '/refs/human_1kg/human_g1k_v37.fasta '
@@ -591,45 +597,50 @@ def make_primer_mapped_strings( target_sequence, passed_primer_seqs):
 
 
 def pretty_print_mappings( target_sequence, tagged_string, primer_strings, base1):
+
+    lines = ""
     
     for i in range(0, len(tagged_sequence), 80):
 
-        print "%-9d  %s" % ( base1+ i, target_sequence[i: i+80])
-        print "           " + tagged_string[i: i+80]
+        lines += "%-9d  %s" % ( base1+ i, target_sequence[i: i+80])
+        lines += "           " + tagged_string[i: i+80]
 
         for primer_string in ( primer_strings ):
 
             line =  "           " + primer_string[i: i+80]
             if ( re.match(r'^ *$', line)):
                 continue
-            print line
+            lines +=line
 
-        print ""
+        lines += ""
 
 
-    print "Map keys::"
-    print "XXXXXX excluded region"
-    print "****** target"
-    print ">>>>>> left primer"
-    print "<<<<<< right primer"
+    lines += "Map keys::"
+    lines += "XXXXXX excluded region"
+    lines += "****** target"
+    lines += ">>>>>> left primer"
+    lines += "<<<<<< right primer"
 
-    print "\n\n"
+    lines += "\n\n"
 
 def pretty_print_primer_data(primer3_results, passed_primers ):
 
+    lines = ""
+
+
     verbose_print( "extract_passed_primer_seqs", 3)
 
-    print "\n\n\n"
+    lines += "\n\n\n"
 
 #    pp.pprint( primer3_results )
 
-    print "_-=-"*15 +"_\n"
+    lines += "_-=-"*15 +"_\n"
 
-    print " Primer design report for chr: %s pos: %d\n" % (chr, pos)
-    print "_-=-"*15 +"_\n\n"
+    lines += " Primer design report for chr: %s pos: %d\n" % (chr, pos)
+    lines += "_-=-"*15 +"_\n\n"
 
-    print "\t".join(['ID', '%GC', 'TM', 'Sequence'])
-    print "_-=-"*15 +"_"
+    lines += "\t".join(['ID', '%GC', 'TM', 'Sequence'])
+    lines += "_-=-"*15 +"_"
 
     primer_seqs = []
     for primer in sorted(passed_primers):
@@ -641,15 +652,15 @@ def pretty_print_primer_data(primer3_results, passed_primers ):
         name = re.sub(r'_SEQUENCE', '', name)
 
 
-        print "\t".join([name, 
+        lines += "\t".join([name, 
                          primer3_results[ "PRIMER_" + name + "_GC_PERCENT"], 
                          primer3_results[ "PRIMER_" + name + "_TM"],
                          primer3_results[ "PRIMER_" + name + "_SEQUENCE"], 
                          passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]])
 
-    print ""
-    print "-="*46
-    print ""
+    lines += ""
+    lines += "-="*46
+    lines += ""
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #
@@ -667,6 +678,9 @@ FLANK = int( FLANK )
 
 region_id = "%s:%d" % ( chr, pos)
 
+c = canvas.Canvas("%s_%d.pdf" % (chr, pos), pagesize=A4)
+
+
 target_sequence                   =   fetch_region( chr, pos - FLANK, pos + FLANK     )
 (tagged_sequence, tagged_string)  =   markup_sequence( chr, pos, FLANK, target_sequence  )
 
@@ -680,7 +694,7 @@ passed_primer_seqs = extract_passed_primer_seqs( primer3_results, passed_primers
 mapped_primer_strings = make_primer_mapped_strings( target_sequence, passed_primer_seqs)
 
 
-pretty_print_primer_data(primer3_results, passed_primers )
+print pretty_print_primer_data(primer3_results, passed_primers )
 
-pretty_print_mappings( target_sequence, tagged_string, mapped_primer_strings, pos - FLANK)
+print pretty_print_mappings( target_sequence, tagged_string, mapped_primer_strings, pos - FLANK)
 
