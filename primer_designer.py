@@ -25,6 +25,7 @@ PRIMER3    = '/software/bin/primer3_core '
 FLANK              = 500
 NR_PRIMERS         = 4
 ALLOWED_MISMATCHES = 4
+MAX_CHR_MAPPINGS   = 5
 
 VERBOSE    =  3
 
@@ -342,9 +343,18 @@ def check_primers( region_id, target_region, primer3_dict):
         if (primer == 'FULLSEQ'):
             continue 
 
-        if (len( res[ primer ][ 'CHR' ]) > 1 ):
-#            print primer + " matches more than one place in the genome "
-            del (res[ primer ])
+        res[ primer ]['MAPPING_SUMMARY'] = 'unique mapping'
+
+
+        if (len( res[ primer ][ 'CHR' ]) > 1 and len( res[ primer ][ 'CHR' ]) <= MAX_CHR_MAPPINGS ):
+            res[ primer ]['MAPPING_SUMMARY'] = '%d mappings' % len( res[ primer ][ 'POS' ])
+            res[ primer ][ 'MAPPING_SUMMARY' ] += " to chromosomes: " + ",".join(res[ primer ][ 'CHR' ])
+
+
+        elif (len( res[ primer ][ 'CHR' ]) >= MAX_CHR_MAPPINGS ):
+            res[ primer ]['MAPPING_SUMMARY'] = '%d mappings' % len( res[ primer ][ 'POS' ])
+            res[ primer ][ 'MAPPING_SUMMARY' ] += " on %d chromosomes" % len( res[ primer ][ 'CHR' ])
+
 
 
 #    pp.pprint( smalt_report)
@@ -634,7 +644,8 @@ def pretty_print_primer_data(primer3_results, passed_primers ):
         print "\t".join([name, 
                          primer3_results[ "PRIMER_" + name + "_GC_PERCENT"], 
                          primer3_results[ "PRIMER_" + name + "_TM"],
-                         primer3_results[ "PRIMER_" + name + "_SEQUENCE"], ])
+                         primer3_results[ "PRIMER_" + name + "_SEQUENCE"], 
+                         passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]])
 
     print ""
     print "-="*46
@@ -662,6 +673,7 @@ target_sequence                   =   fetch_region( chr, pos - FLANK, pos + FLAN
 
 primer3_results  = run_primer3( region_id , tagged_sequence, "%s_%d.primer3" % ( chr, pos))
 passed_primers   = check_primers( region_id, target_sequence, primer3_results)
+#pp.pprint( passed_primers )
 passed_primer_seqs = extract_passed_primer_seqs( primer3_results, passed_primers )
 
 
