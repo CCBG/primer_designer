@@ -34,6 +34,8 @@ ALLOWED_MISMATCHES = 4
 MAX_CHR_MAPPINGS   = 5
 
 VERBOSE    =  3
+VERSION    =  '1.0-rc1'
+
 
 def verbose_print( msg, level ):
     if ( level <= VERBOSE ):
@@ -442,6 +444,7 @@ def get_and_parse_arguments():
     parser.add_argument('-p', '--pos')
     parser.add_argument('-o', '--output')
     parser.add_argument('-f', '--flank')
+    parser.add_argument('-t', '--text_output')
 
     args = parser.parse_args()
 
@@ -598,49 +601,57 @@ def make_primer_mapped_strings( target_sequence, passed_primer_seqs):
 
 def pretty_print_mappings( target_sequence, tagged_string, primer_strings, base1):
 
-    lines = ""
+    lines = []
     
-    for i in range(0, len(tagged_sequence), 80):
+    for i in range(0, len(target_sequence), 80):
 
-        lines += "%-9d  %s" % ( base1+ i, target_sequence[i: i+80])
-        lines += "           " + tagged_string[i: i+80]
+
+        lines.append("%-9d  %s" % ( base1+ i, target_sequence[i: i+80]))
+        lines.append("           " + tagged_string[i: i+80])
 
         for primer_string in ( primer_strings ):
 
             line =  "           " + primer_string[i: i+80]
             if ( re.match(r'^ *$', line)):
                 continue
-            lines +=line
+            lines.append( line )
 
-        lines += ""
+        lines.append( "" )
 
 
-    lines += "Map keys::"
-    lines += "XXXXXX excluded region"
-    lines += "****** target"
-    lines += ">>>>>> left primer"
-    lines += "<<<<<< right primer"
+    lines.append( "Map keys::" )
+    lines.append( "XXXXXX excluded region" )
+    lines.append( "****** target" )
+    lines.append( ">>>>>> left primer" )
+    lines.append( "<<<<<< right primer" )
 
-    lines += "\n\n"
+    lines.append( "\n" )
+    lines.append( "\n" )
+
+    return lines
 
 def pretty_print_primer_data(primer3_results, passed_primers ):
 
-    lines = ""
+    lines = []
 
 
     verbose_print( "extract_passed_primer_seqs", 3)
 
-    lines += "\n\n\n"
+    lines.append( "\n" )
+    lines.append( "\n" )
+    lines.append( "\n" )
 
 #    pp.pprint( primer3_results )
 
-    lines += "_-=-"*15 +"_\n"
+    lines.append( "_-=-"*15 +"_" )
 
-    lines += " Primer design report for chr: %s pos: %d\n" % (chr, pos)
-    lines += "_-=-"*15 +"_\n\n"
+    lines.append( " Primer design report for chr: %s pos: %d" % (chr, pos))
+    lines.append( "_-=-"*15 +"_")
+    lines.append( "\n")
 
-    lines += "\t".join(['ID', '%GC', 'TM', 'Sequence'])
-    lines += "_-=-"*15 +"_"
+#    lines.append( "\t".join(['ID', '%GC', 'TM', 'Sequence']))
+    lines.append( "ID         %GC    TM     Primer sequence           Mapping(s)    ")
+    lines.append( "_-=-"*15 +"_")
 
     primer_seqs = []
     for primer in sorted(passed_primers):
@@ -652,15 +663,40 @@ def pretty_print_primer_data(primer3_results, passed_primers ):
         name = re.sub(r'_SEQUENCE', '', name)
 
 
-        lines += "\t".join([name, 
-                         primer3_results[ "PRIMER_" + name + "_GC_PERCENT"], 
-                         primer3_results[ "PRIMER_" + name + "_TM"],
-                         primer3_results[ "PRIMER_" + name + "_SEQUENCE"], 
-                         passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]])
+#        lines.append( "\t".join([name, 
+#                         primer3_results[ "PRIMER_" + name + "_GC_PERCENT"], 
+#                         primer3_results[ "PRIMER_" + name + "_TM"],
+#                         primer3_results[ "PRIMER_" + name + "_SEQUENCE"], 
+#                         passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]]))
 
-    lines += ""
-    lines += "-="*46
-    lines += ""
+
+        lines.append( "%-10s %.2f  %.2f  %-25s %s" % (name, 
+                                                     float(primer3_results[ "PRIMER_" + name + "_GC_PERCENT"]), 
+                                                     float(primer3_results[ "PRIMER_" + name + "_TM"]),
+                                                     primer3_results[ "PRIMER_" + name + "_SEQUENCE"], 
+                                                     passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]))
+
+
+    lines.append( "" )
+    lines.append( "-="*46 )
+    lines.append( "" )
+
+    return lines
+
+
+
+def method_blurb():
+
+    lines = []
+
+
+    
+    lines.append('primer-designer version: ' + VERSION + ' using dbSNP 144 for SNP checking, and human reference GRCh37.')
+
+    lines.append('Common SNP annotation: A common SNP is one that has at least one 1000Genomes population with a minor ')
+    lines.append('allele of frequency >= 1% and for which 2 or more founders contribute to that minor allele frequency.')
+
+    return lines
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #
@@ -678,7 +714,6 @@ FLANK = int( FLANK )
 
 region_id = "%s:%d" % ( chr, pos)
 
-c = canvas.Canvas("%s_%d.pdf" % (chr, pos), pagesize=A4)
 
 
 target_sequence                   =   fetch_region( chr, pos - FLANK, pos + FLANK     )
@@ -687,14 +722,53 @@ target_sequence                   =   fetch_region( chr, pos - FLANK, pos + FLAN
 
 primer3_results  = run_primer3( region_id , tagged_sequence, "%s_%d.primer3" % ( chr, pos))
 passed_primers   = check_primers( region_id, target_sequence, primer3_results)
-#pp.pprint( passed_primers )
+pp.pprint( passed_primers )
 passed_primer_seqs = extract_passed_primer_seqs( primer3_results, passed_primers )
 
 
 mapped_primer_strings = make_primer_mapped_strings( target_sequence, passed_primer_seqs)
 
 
-print pretty_print_primer_data(primer3_results, passed_primers )
 
-print pretty_print_mappings( target_sequence, tagged_string, mapped_primer_strings, pos - FLANK)
+lines  =  pretty_print_primer_data(primer3_results, passed_primers )
+
+lines += pretty_print_mappings( target_sequence, tagged_string, mapped_primer_strings, pos - FLANK)
+
+
+
+if (  args.text_output ):
+    print "\n".join(lines)
+    exit()
+
+else:
+
+    lines += method_blurb()
+
+
+    print "\n".join(lines)
+
+    c = canvas.Canvas("%s_%d.pdf" % (chr, pos), pagesize=A4)
+    width, height = A4 #keep for later
+
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    font = TTFont('mono', '/usr/share/fonts/truetype/ttf-liberation/LiberationMono-Regular.ttf')
+    pdfmetrics.registerFont( font )
+    c.setFont('mono', 7)
+
+    top_offset = height - 30
+    for line in lines:
+        top_offset -= 8
+        if (line == "\n"):
+            continue
+
+        c.drawString(40 , top_offset, line)
+
+    c.showPage()
+    c.save()
+
+
+
+
 
