@@ -31,7 +31,7 @@ PRIMER3    = '/software/bin/primer3_core '
 FLANK              = 500
 NR_PRIMERS         = 4
 ALLOWED_MISMATCHES = 4
-MAX_CHR_MAPPINGS   = 5
+MAX_MAPPINGS   = 5
 
 VERBOSE    =  3
 VERSION    =  '1.0-rc1'
@@ -63,6 +63,8 @@ def fetch_known_SNPs( tabix_file, chr, start, end):
     verbose_print( "fetch_known_SNPs", 3)
 
     cmd = "%s %s  %s:%d-%d " % ( TABIX, tabix_file, chr, start, end )
+
+    print cmd
 
     args = shlex.split( cmd )
     p = subprocess.Popen(args, stdout=subprocess.PIPE)
@@ -354,14 +356,17 @@ def check_primers( region_id, target_region, primer3_dict):
         res[ primer ]['MAPPING_SUMMARY'] = 'unique mapping'
 
 
-        if (len( res[ primer ][ 'CHR' ]) > 1 and len( res[ primer ][ 'CHR' ]) <= MAX_CHR_MAPPINGS ):
-            res[ primer ]['MAPPING_SUMMARY'] = '%d mappings' % len( res[ primer ][ 'POS' ])
+        nr_of_chromosomes = len(set(res[ primer ][ 'CHR' ]))
+        nr_of_mappings    = len( res[ primer ][ 'POS' ])
+
+        if (nr_of_mappings > 1 and nr_of_mappings <= MAX_MAPPINGS ):
+            res[ primer ]['MAPPING_SUMMARY'] = '%d mappings' % nr_of_mappings
             res[ primer ][ 'MAPPING_SUMMARY' ] += " to chromosomes: " + ",".join(res[ primer ][ 'CHR' ])
 
 
-        elif (len( res[ primer ][ 'CHR' ]) >= MAX_CHR_MAPPINGS ):
-            res[ primer ]['MAPPING_SUMMARY'] = '%d mappings' % len( res[ primer ][ 'POS' ])
-            res[ primer ][ 'MAPPING_SUMMARY' ] += " on %d chromosomes" % len( res[ primer ][ 'CHR' ])
+        elif (nr_of_mappings >= MAX_MAPPINGS ):
+            res[ primer ]['MAPPING_SUMMARY'] = '%d mappings' % nr_of_mappings
+            res[ primer ][ 'MAPPING_SUMMARY' ] += " on %d chromosomes" % nr_of_chromosomes
 
 
 
@@ -463,7 +468,7 @@ def markup_sequence( chr, pos, flank, sequence):
     # Tag the target sequence, regardless of the nature of the variant only one (1) base is tagged as the target.
     sequence[ flank ] = ' [' + target_sequence [ flank ] + '] '
 
-    dbSNPs = fetch_known_SNPs( '/software/dev/projects/local_dbsnp/test.tab.gz', chr, pos - flank, pos + flank )
+    dbSNPs = fetch_known_SNPs( '/software/dev/projects/local_dbsnp/annots-rsIDs-dbSNPv144.20150605.tab.gz', chr, pos - flank, pos + flank )
 
     masked_positions = []
 
@@ -689,8 +694,6 @@ def method_blurb():
 
     lines = []
 
-
-    
     lines.append('primer-designer version: ' + VERSION + ' using dbSNP 144 for SNP checking, and human reference GRCh37.')
 
     lines.append('Common SNP annotation: A common SNP is one that has at least one 1000Genomes population with a minor ')
@@ -722,7 +725,7 @@ target_sequence                   =   fetch_region( chr, pos - FLANK, pos + FLAN
 
 primer3_results  = run_primer3( region_id , tagged_sequence, "%s_%d.primer3" % ( chr, pos))
 passed_primers   = check_primers( region_id, target_sequence, primer3_results)
-pp.pprint( passed_primers )
+#pp.pprint( passed_primers )
 passed_primer_seqs = extract_passed_primer_seqs( primer3_results, passed_primers )
 
 
