@@ -19,6 +19,14 @@ from reportlab.lib.pagesizes import A4
 width, height = A4 #keep for later
 
 
+colours = [[255,   0,   0], # red
+           [  0, 255,   0], # green
+           [  0,   0, 255], # blue
+           [255,   0, 255], # Pink
+           [0,   255, 255],
+           [255, 255,   0]] # Yellow, crap!
+
+
 
 # External tools we use 
 SAMTOOLS   = '/software/bin/samtools ';
@@ -555,7 +563,7 @@ def make_primer_mapped_strings( target_sequence, passed_primer_seqs):
     mapped_strings.append( [" "]*len( target_sequence ) )
 
     mapped_colours = []
-    mapped_colours.append( [" "]*len( target_sequence ) )
+    mapped_colours.append( [ -1 ]*len( target_sequence ) )
 
     for mapping in mappings:
         ( name, primer, pos, strand ) = mapping
@@ -593,6 +601,7 @@ def make_primer_mapped_strings( target_sequence, passed_primer_seqs):
 
                 if (len( mapped_strings ) >= scan_index ):
                     mapped_strings.append([" "]*len( target_sequence ))
+                    mapped_colours.append([ -1 ]*len( target_sequence ))
 
             else:
                 break
@@ -644,24 +653,72 @@ def pretty_print_mappings( target_sequence, tagged_string, primer_strings, base1
     return lines
 
 
-def pretty_pdf_mappings( target_sequence, tagged_string, primer_strings, base1):
+def pretty_pdf_mappings(top_offset,  target_sequence, tagged_string, primer_strings, primer_colours, base1):
 
     lines = []
     
     for i in range(0, len(target_sequence), 80):
 
 
-        lines.append("%-9d  %s" % ( base1+ i, target_sequence[i: i+80]))
-        lines.append("           " + tagged_string[i: i+80])
+#        c.drawString(40, top_offset, "%-9d  %s" % ( base1+ i, target_sequence[i: i+80]))
+#        top_offset -= 8
+#        c.drawString(40, top_offset, "           " + tagged_string[i: i+80])
+#        top_offset -= 8
 
-        for primer_string in ( primer_strings ):
+        p_line = "%-9d  %s" % ( base1+ i, target_sequence[i: i+80])
+        m_line = "           " + tagged_string[i: i+80]
 
-            line =  "           " + primer_string[i: i+80]
+
+        x_offset = 40
+        for k in range(0, len(p_line)):
+
+            if (m_line[ k ] == "X"):
+                c.setFillColorRGB(255,0,0)
+            elif (m_line[ k ] == "*"):
+                c.setFillColorRGB(0,190,0)
+
+            c.drawString(x_offset , top_offset, p_line[k])
+            x_offset += stringWidth(" ", 'mono', 7)
+            c.setFillColorRGB(0,0,0)
+
+
+        top_offset -= 8
+
+        for j in range(0, len(primer_strings)):
+            primer_string = primer_strings[ j ]
+            primer_colour = primer_colours[ j ]
+
+            line = primer_string[i: i+80]
             if ( re.match(r'^ *$', line)):
                 continue
-            lines.append( line )
 
-        lines.append( "" )
+            x_offset = 40 + stringWidth(" ", 'mono', 7)*11
+
+            for k in range(i, i+80):
+                if ( k > len(target_sequence) - 1):
+                    break
+
+                if ( primer_colour[k] >= 0 ):
+
+                    c.setFillColorRGB(colours[ primer_colour[k] ][0], 
+                                      colours[ primer_colour[k] ][1],
+                                      colours[ primer_colour[k] ][2])
+
+                c.drawString(x_offset , top_offset, primer_string[k])
+                x_offset += stringWidth(" ", 'mono', 7)
+                c.setFillColorRGB(0,0,0)
+
+
+            top_offset -= 8
+
+        top_offset -= 8
+
+#            lines.append( line )
+
+#        lines.append( "" )
+
+
+    return top_offset
 
 
     lines.append( "Map keys::" )
@@ -674,7 +731,7 @@ def pretty_pdf_mappings( target_sequence, tagged_string, primer_strings, base1):
     lines.append( "\n" )
 
     return lines
-l
+
 
 def pretty_print_primer_data(primer3_results, passed_primers ):
 
@@ -748,12 +805,6 @@ def pretty_pdf_primer_data(c, y_offset, primer3_results, passed_primers ):
     y_offset -= 8
 
 
-    colours = [[255,   0,   0], # red
-               [  0, 255,   0], # green
-               [  0,   0, 255], # blue
-               [255,   0, 255], # Pink
-               [0,   255, 255],
-               [255, 255,   0]] # Yellow, crap!
 
 
     primer_seqs = []
@@ -806,6 +857,7 @@ def pretty_pdf_primer_data(c, y_offset, primer3_results, passed_primers ):
     y_offset -= 8
     c.line(40,y_offset,width - 40 ,y_offset+2)
     y_offset -= 8
+    y_offset -= 8
 
 
     return y_offset
@@ -854,9 +906,6 @@ passed_primer_seqs = extract_passed_primer_seqs( primer3_results, passed_primers
 
 (mapped_primer_strings, mapped_primer_colours) = make_primer_mapped_strings( target_sequence, passed_primer_seqs)
 
-pp.pprint( mapped_primer_strings )
-pp.pprint( mapped_primer_colours )
-
 
 
 #lines  =  pretty_print_primer_data(primer3_results, passed_primers )
@@ -898,31 +947,34 @@ else:
     c.setFont('mono', 7)
 
     top_offset = pretty_pdf_primer_data(c, height - 30, primer3_results, passed_primers )
-
-    for line in lines:
-        top_offset -= 8
-        if (line == "\n"):
-            continue
-
-        if ( re.search(r'X', line) or re.search(r'\*', line)):
-            x_offset = 40
-            for character in line:
-                if (character == 'X'):
-                    c.setFillColorRGB(255,0,0)
-                    c.drawString(x_offset , top_offset, character)
-                    c.setFillColorRGB(0,0,0)
-                elif  (character == '*'):
-                    c.setFillColorRGB(0,255,0)
-                    c.drawString(x_offset , top_offset, character)
-                    c.setFillColorRGB(0,0,0)
-                else:
-                    c.drawString(x_offset , top_offset, character)
-
-                x_offset += stringWidth(character, 'mono', 7)
+    c.setFont('mono', 8)
+    pretty_pdf_mappings(top_offset,  target_sequence, tagged_string, mapped_primer_strings, mapped_primer_colours, pos - FLANK)
 
 
-        else:
-            c.drawString(40 , top_offset, line)
+    # for line in lines:
+    #     top_offset -= 8
+    #     if (line == "\n"):
+    #         continue
+
+    #     if ( re.search(r'X', line) or re.search(r'\*', line)):
+    #         x_offset = 40
+    #         for character in line:
+    #             if (character == 'X'):
+    #                 c.setFillColorRGB(255,0,0)
+    #                 c.drawString(x_offset , top_offset, character)
+    #                 c.setFillColorRGB(0,0,0)
+    #             elif  (character == '*'):
+    #                 c.setFillColorRGB(0,255,0)
+    #                 c.drawString(x_offset , top_offset, character)
+    #                 c.setFillColorRGB(0,0,0)
+    #             else:
+    #                 c.drawString(x_offset , top_offset, character)
+
+    #             x_offset += stringWidth(character, 'mono', 7)
+
+
+    #     else:
+    #         c.drawString(40 , top_offset, line)
 
     c.showPage()
     c.save()
