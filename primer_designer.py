@@ -690,6 +690,88 @@ def pretty_print_primer_data(primer3_results, passed_primers ):
 
 
 
+def pretty_pdf_primer_data(c, y_offset, primer3_results, passed_primers ):
+
+#    c.drawString(40 , y_offset, "_-=-"*15 +"_" )
+    c.line(40,y_offset,width - 40  ,y_offset+2)
+    y_offset -= 8
+
+    c.drawString(40 , y_offset, "Primer design report for chr: %s pos: %d" % (chr, pos))
+    y_offset -= 8
+    c.line(40,y_offset,width - 40 ,y_offset+2)
+    y_offset -= 16
+
+    c.drawString(40 , y_offset, "ID         %GC    TM     Primer sequence           Mapping(s)    ")
+    y_offset -= 8
+    c.line(40,y_offset,width - 40 ,y_offset+2)
+    y_offset -= 8
+
+
+    colours = [[255,   0,   0], # red
+               [  0, 255,   0], # green
+               [  0,   0, 255], # blue
+               [255,   0, 255], # Pink
+               [0,   255, 255],
+               [255, 255,   0]] # Yellow, crap!
+
+
+    primer_seqs = []
+    for primer in sorted(passed_primers):
+        if ( primer == 'FULLSEQ'):
+            continue
+
+
+        name = primer
+        name = re.sub(r'PRIMER_', '', name)
+        name = re.sub(r'_SEQUENCE', '', name)
+
+        
+        if (name == "RIGHT_0"):
+            y_offset -= 8
+
+
+#        lines.append( "\t".join([name, 
+#                         primer3_results[ "PRIMER_" + name + "_GC_PERCENT"], 
+#                         primer3_results[ "PRIMER_" + name + "_TM"],
+#                         primer3_results[ "PRIMER_" + name + "_SEQUENCE"], 
+#                         passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]]))
+
+
+        c.drawString(40 , y_offset, "%-10s %.2f  %.2f  %-25s %s" % ("", 
+                                                     float(primer3_results[ "PRIMER_" + name + "_GC_PERCENT"]), 
+                                                     float(primer3_results[ "PRIMER_" + name + "_TM"]),
+                                                     primer3_results[ "PRIMER_" + name + "_SEQUENCE"], 
+                                                     passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]))
+
+        primer_nr = re.sub(r'.*_(\d)',r'\1' , name)
+
+#        pp.pprint( primer_nr )
+#        print pp.pprint(colours[ int( primer_nr ) ])
+        
+
+        c.setFillColorRGB(colours[ int( primer_nr ) ][0], 
+                          colours[ int( primer_nr ) ][1],
+                          colours[ int( primer_nr ) ][2])
+
+        c.drawString(40 , y_offset, name)
+        c.setFillColorRGB(0,0,0)
+        y_offset -= 8
+
+
+            
+
+
+
+    y_offset -= 8
+    c.line(40,y_offset,width - 40 ,y_offset+2)
+    y_offset -= 8
+
+
+    return y_offset
+
+
+
+
 def method_blurb():
 
     lines = []
@@ -733,9 +815,9 @@ mapped_primer_strings = make_primer_mapped_strings( target_sequence, passed_prim
 
 
 
-lines  =  pretty_print_primer_data(primer3_results, passed_primers )
+#lines  =  pretty_print_primer_data(primer3_results, passed_primers )
 
-lines += pretty_print_mappings( target_sequence, tagged_string, mapped_primer_strings, pos - FLANK)
+lines = pretty_print_mappings( target_sequence, tagged_string, mapped_primer_strings, pos - FLANK)
 
 
 
@@ -753,16 +835,15 @@ else:
     filename = "%s_%d" % (chr, pos)
 
     if ( args.output ):
-        filename = filename + "_" +  args.output
-
+        filename = args.output + "_" + filename
 
     if (not re.match(".pdf", filename )):
         filename += ".pdf"
 
-
     c = canvas.Canvas( filename , pagesize=A4)
     
     width, height = A4 #keep for later
+    print width
 
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
@@ -772,7 +853,8 @@ else:
     pdfmetrics.registerFont( font )
     c.setFont('mono', 7)
 
-    top_offset = height - 30
+    top_offset = pretty_pdf_primer_data(c, height - 30, primer3_results, passed_primers )
+
     for line in lines:
         top_offset -= 8
         if (line == "\n"):
