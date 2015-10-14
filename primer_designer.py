@@ -554,8 +554,15 @@ def make_primer_mapped_strings( target_sequence, passed_primer_seqs):
     mapped_strings = []
     mapped_strings.append( [" "]*len( target_sequence ) )
 
+    mapped_colours = []
+    mapped_colours.append( [" "]*len( target_sequence ) )
+
     for mapping in mappings:
         ( name, primer, pos, strand ) = mapping
+
+        primer_nr = int(re.sub(r'.*_(\d)',r'\1' , name))
+
+
 
         mapping_index = 0
 
@@ -594,14 +601,15 @@ def make_primer_mapped_strings( target_sequence, passed_primer_seqs):
         mapping_index = scan_index 
 
         for i in range(0, len( primer)):
-            mapped_strings[ mapping_index] [ pos + i ] = primer[ i ]
+            mapped_strings[ mapping_index ] [ pos + i ] = primer[ i ]
+            mapped_colours[ mapping_index ] [ pos + i ] = primer_nr
 
 
 
     for i in range(0, len(mapped_strings)):
         mapped_strings[ i ] = "".join( mapped_strings[ i ])
 
-    return mapped_strings
+    return mapped_strings, mapped_colours
 
 
 def pretty_print_mappings( target_sequence, tagged_string, primer_strings, base1):
@@ -634,6 +642,39 @@ def pretty_print_mappings( target_sequence, tagged_string, primer_strings, base1
     lines.append( "\n" )
 
     return lines
+
+
+def pretty_pdf_mappings( target_sequence, tagged_string, primer_strings, base1):
+
+    lines = []
+    
+    for i in range(0, len(target_sequence), 80):
+
+
+        lines.append("%-9d  %s" % ( base1+ i, target_sequence[i: i+80]))
+        lines.append("           " + tagged_string[i: i+80])
+
+        for primer_string in ( primer_strings ):
+
+            line =  "           " + primer_string[i: i+80]
+            if ( re.match(r'^ *$', line)):
+                continue
+            lines.append( line )
+
+        lines.append( "" )
+
+
+    lines.append( "Map keys::" )
+    lines.append( "XXXXXX excluded region" )
+    lines.append( "****** target" )
+    lines.append( ">>>>>> left primer" )
+    lines.append( "<<<<<< right primer" )
+
+    lines.append( "\n" )
+    lines.append( "\n" )
+
+    return lines
+l
 
 def pretty_print_primer_data(primer3_results, passed_primers ):
 
@@ -811,7 +852,10 @@ passed_primers   = check_primers( region_id, target_sequence, primer3_results)
 passed_primer_seqs = extract_passed_primer_seqs( primer3_results, passed_primers )
 
 
-mapped_primer_strings = make_primer_mapped_strings( target_sequence, passed_primer_seqs)
+(mapped_primer_strings, mapped_primer_colours) = make_primer_mapped_strings( target_sequence, passed_primer_seqs)
+
+pp.pprint( mapped_primer_strings )
+pp.pprint( mapped_primer_colours )
 
 
 
