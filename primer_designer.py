@@ -748,13 +748,25 @@ else:
     lines += method_blurb()
 
 
-    print "\n".join(lines)
+#    print "\n".join(lines)
 
-    c = canvas.Canvas("%s_%d.pdf" % (chr, pos), pagesize=A4)
+    filename = "%s_%d" % (chr, pos)
+
+    if ( args.output ):
+        filename = filename + "_" +  args.output
+
+
+    if (not re.match(".pdf", filename )):
+        filename += ".pdf"
+
+
+    c = canvas.Canvas( filename , pagesize=A4)
+    
     width, height = A4 #keep for later
 
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.pdfbase.pdfmetrics import stringWidth 
 
     font = TTFont('mono', '/usr/share/fonts/truetype/ttf-liberation/LiberationMono-Regular.ttf')
     pdfmetrics.registerFont( font )
@@ -766,7 +778,25 @@ else:
         if (line == "\n"):
             continue
 
-        c.drawString(40 , top_offset, line)
+        if ( re.search(r'X', line) or re.search(r'\*', line)):
+            x_offset = 40
+            for character in line:
+                if (character == 'X'):
+                    c.setFillColorRGB(255,0,0)
+                    c.drawString(x_offset , top_offset, character)
+                    c.setFillColorRGB(0,0,0)
+                elif  (character == '*'):
+                    c.setFillColorRGB(0,255,0)
+                    c.drawString(x_offset , top_offset, character)
+                    c.setFillColorRGB(0,0,0)
+                else:
+                    c.drawString(x_offset , top_offset, character)
+
+                x_offset += stringWidth(character, 'mono', 7)
+
+
+        else:
+            c.drawString(40 , top_offset, line)
 
     c.showPage()
     c.save()
