@@ -42,7 +42,7 @@ ALLOWED_MISMATCHES = 4
 MAX_MAPPINGS   = 5
 
 VERBOSE    =  3
-VERSION    =  '1.0-rc1'
+VERSION    =  '1.0-rc2'
 
 
 def verbose_print( msg, level ):
@@ -640,6 +640,7 @@ def pretty_print_mappings( target_sequence, tagged_string, primer_strings, base1
 
         lines.append( "" )
 
+    return lines
 
     lines.append( "Map keys::" )
     lines.append( "XXXXXX excluded region" )
@@ -678,11 +679,24 @@ def pretty_pdf_mappings(top_offset,  target_sequence, tagged_string, primer_stri
                 c.setFillColorRGB(0,190,0)
 
             c.drawString(x_offset , top_offset, p_line[k])
-            x_offset += stringWidth(" ", 'mono', 7)
+            x_offset += stringWidth(" ", 'mono', 8)
             c.setFillColorRGB(0,0,0)
 
 
         top_offset -= 8
+
+        m_line = re.sub(r'X', r' ', m_line)
+
+        if (re.search(r'\*', m_line)):
+            c.setFillColorRGB(0,190,0)
+            c.drawString(40 , top_offset, m_line)
+            c.setFillColorRGB(0,0,0)
+
+            top_offset -= 8
+
+
+#        if (m_line.search(r'\*', name) :
+
 
         for j in range(0, len(primer_strings)):
             primer_string = primer_strings[ j ]
@@ -692,7 +706,7 @@ def pretty_pdf_mappings(top_offset,  target_sequence, tagged_string, primer_stri
             if ( re.match(r'^ *$', line)):
                 continue
 
-            x_offset = 40 + stringWidth(" ", 'mono', 7)*11
+            x_offset = 40 + stringWidth(" ", 'mono', 8)*11
 
             for k in range(i, i+80):
                 if ( k > len(target_sequence) - 1):
@@ -705,7 +719,7 @@ def pretty_pdf_mappings(top_offset,  target_sequence, tagged_string, primer_stri
                                       colours[ primer_colour[k] ][2])
 
                 c.drawString(x_offset , top_offset, primer_string[k])
-                x_offset += stringWidth(" ", 'mono', 7)
+                x_offset += stringWidth(" ", 'mono', 8)
                 c.setFillColorRGB(0,0,0)
 
 
@@ -721,16 +735,15 @@ def pretty_pdf_mappings(top_offset,  target_sequence, tagged_string, primer_stri
     return top_offset
 
 
-    lines.append( "Map keys::" )
-    lines.append( "XXXXXX excluded region" )
-    lines.append( "****** target" )
-    lines.append( ">>>>>> left primer" )
-    lines.append( "<<<<<< right primer" )
+#        c.drawString(40, top_offset, "Map keys::" )
+#        top_offset -= 8
+#        c.drawString(40, top_offset, "****** target" )
+#        top_offset -= 8
+#        c.drawString(40, top_offset, ">>>>>> left primer" )
+#        top_offset -= 8
+#        c.drawString(40, top_offset, "<<<<<< right primer" )
+#        top_offset -= 8
 
-    lines.append( "\n" )
-    lines.append( "\n" )
-
-    return lines
 
 
 def pretty_print_primer_data(primer3_results, passed_primers ):
@@ -863,8 +876,6 @@ def pretty_pdf_primer_data(c, y_offset, primer3_results, passed_primers ):
     return y_offset
 
 
-
-
 def method_blurb():
 
     lines = []
@@ -875,6 +886,17 @@ def method_blurb():
     lines.append('allele of frequency >= 1% and for which 2 or more founders contribute to that minor allele frequency.')
 
     return lines
+
+
+def pretty_pdf_method(top_offset):
+
+    lines = method_blurb()
+
+    top_offset = 80
+
+    for line in lines:
+        c.drawString(40, top_offset, line)
+        top_offset -= 8
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #
@@ -920,7 +942,7 @@ if (  args.text_output ):
 
 else:
 
-    lines += method_blurb()
+#    lines += method_blurb()
 
 
 #    print "\n".join(lines)
@@ -945,10 +967,13 @@ else:
     font = TTFont('mono', '/usr/share/fonts/truetype/ttf-liberation/LiberationMono-Regular.ttf')
     pdfmetrics.registerFont( font )
     c.setFont('mono', 7)
-
     top_offset = pretty_pdf_primer_data(c, height - 30, primer3_results, passed_primers )
+
     c.setFont('mono', 8)
     pretty_pdf_mappings(top_offset,  target_sequence, tagged_string, mapped_primer_strings, mapped_primer_colours, pos - FLANK)
+
+    pretty_pdf_method(top_offset)
+
 
 
     # for line in lines:
