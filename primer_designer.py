@@ -13,11 +13,9 @@ import shlex
 import subprocess
 import re
 
-
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 width, height = A4 #keep for later
-
 
 colours = [[255,   0,   0], # red
            [  0, 255,   0], # green
@@ -25,8 +23,6 @@ colours = [[255,   0,   0], # red
            [255,   0, 255], # Pink
            [0,   255, 255],
            [255, 255,   0]] # Yellow, crap!
-
-
 
 # External tools we use 
 SAMTOOLS   = '/software/bin/samtools ';
@@ -39,11 +35,10 @@ PRIMER3    = '/software/bin/primer3_core '
 FLANK              = 500
 NR_PRIMERS         = 4
 ALLOWED_MISMATCHES = 4
-MAX_MAPPINGS   = 5
+MAX_MAPPINGS       = 5
 
 VERBOSE    =  3
 VERSION    =  '1.0-rc2'
-
 
 def verbose_print( msg, level ):
     if ( level <= VERBOSE ):
@@ -486,6 +481,7 @@ def markup_sequence( chr, pos, flank, sequence):
     
         (snp_chr, snp_pos, snp_id, snp_ref, snp_alt, common, vld, caf) = dbSNP
 
+
         snp_pos = int( snp_pos )
         if ( common == '1'):
             #        pp.pprint( dbSNP )
@@ -497,6 +493,8 @@ def markup_sequence( chr, pos, flank, sequence):
         
         # In the odd case we are looking at common deletion, mask the whole region. Normally this will just be one base
             for i in range(0, len(snp_ref)):
+                if (len(sequence)<=  mask_pos + i):
+                    break
 
                 # If already masked skip masking it again.
                 if ( re.search('<', sequence[ mask_pos + i  ]) or 
