@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import re
 import os
 import sys
@@ -5,6 +6,7 @@ import pipeliners as pipe
 
 infile = sys.argv[1]
 
+# Run designer function 
 def run_designer(testname, chro, npos):
 	
 	if "-" in npos:
@@ -20,6 +22,7 @@ def run_designer(testname, chro, npos):
 		#print "single base"
 		pipe.system_call("Running design_primers", cmd )
 
+# Main Loop
 with open( infile , "rU" ) as plist:
 	
 	for line in plist:
