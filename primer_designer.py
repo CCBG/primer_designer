@@ -953,6 +953,9 @@ else:
     if (not re.match(".pdf", filename )):
         filename += ".pdf"
 
+#    print "Going with filename '%s'" % filename
+
+
     c = canvas.Canvas( filename , pagesize=A4)
     
     width, height = A4 #keep for later
