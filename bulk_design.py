@@ -8,6 +8,7 @@
 import sys
 import pprint
 pp = pprint.PrettyPrinter(indent=4)
+
 import os
 import sys
 import re
@@ -39,11 +40,29 @@ if ( infile.find(".txt") == -1):
 
 outfile = re.sub(r'.txt', '.zip', infile)
 
-with open( infile , "rU" ) as plist:
+# Run designer function 
+def run_designer(testname, chro, npos):
+	
+	if "-" in npos:
+		
+		npos = re.sub(r"(.*)-(.*)", r"\1 \2", npos)
+		#print npos
+		cmd = "primer_designer_region -c " + chro + " -r " + npos + " -o " + testname
+		#print "region"
+		pipe.system_call("Running design_primers", cmd )
+	
+	else:
+		cmd = "primer_designer_region -c " + chro + " -p " + npos + " -o " + testname
+		#print "single base"
+		pipe.system_call("Running design_primers", cmd )
 
+
+# Main Loop
+with open( infile , "rU" ) as plist:
+	
 	for line in plist:
 
-		line = line.strip("\n")
+ 		line = line.strip("\n")
 		if ( line.find("\t") == -1):
 			print "'%s' does not contain a 'tab'";
 			next

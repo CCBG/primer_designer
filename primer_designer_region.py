@@ -428,7 +428,6 @@ def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
             verbose_print( "Non unique mapping ( %s )" % primer, 5)
             continue
 
-
         if ( not primer_data[ primer ][ 'CHR' ] or primer_data[ primer ][ 'CHR' ][ 0 ] != chromo ):
             verbose_print( "No mapping or Unique mapping to different chromosome (%s). Should never happen! " % primer, 5)
             continue
