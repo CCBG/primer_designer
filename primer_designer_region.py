@@ -745,14 +745,14 @@ def get_primer_seqs( primers ):
 # Collapse primer_tag_string where possigle, ie two primers does not overlap
 # And finally assign colours to each of the primer pairs.
 #
-# input target sequence and primers
+# input target sequence and primer dict
 #
 # output: list of string with mapped primers, list of list with colours to apply
 #
-def make_mapped_primer_strings( target_sequence, primers):
+def make_mapped_primer_strings( target_sequence, primer_dict):
 
     # extract the primer sequences
-    primer_seqs = get_primer_seqs( primers )
+    primer_seqs = get_primer_seqs( primer_dict )
     
     verbose_print( "primer_make_mapped_strings", 2)
     # Align the primers to the target sequence to see where they align
@@ -1030,7 +1030,7 @@ def pretty_print_primer_data(primer_dict, target_chrom, target_start, target_end
 #
 # output: string with nicely formatted data
 #
-def pretty_pdf_primer_data(c, y_offset, target_chrom, target_start, target_end, passed_primers, fwd_primer=None, rev_primer=None ):
+def pretty_pdf_primer_data(c, y_offset, target_chrom, target_start, target_end, primer_dict, fwd_primer=None, rev_primer=None ):
     verbose_print("pretty_pdf_primer_data", 2)
 
 #    c.drawString(40 , y_offset, "_-=-"*15 +"_" )
@@ -1057,7 +1057,7 @@ def pretty_pdf_primer_data(c, y_offset, target_chrom, target_start, target_end, 
 
 
     primer_seqs = []
-    for primer in sorted(passed_primers):
+    for primer in sorted(primer_dict):
         if ( primer == 'FULLSEQ'):
             continue
 
@@ -1092,10 +1092,10 @@ def pretty_pdf_primer_data(c, y_offset, target_chrom, target_start, target_end, 
 
 
         c.drawString(40 , y_offset, "%-10s %.2f  %.2f  %-25s %s            %s" % ("", 
-                                    passed_primers[ name ][ "GC_PERCENT"], 
-                                    passed_primers[ name ][ "TM"],
-                                    passed_primers[ name ][ "SEQ"], picked_primer,
-                                    passed_primers[ name ][ 'MAPPING_SUMMARY' ]))
+                                    primer_dict[ name ][ "GC_PERCENT"], 
+                                    primer_dict[ name ][ "TM"],
+                                    primer_dict[ name ][ "SEQ"], picked_primer,
+                                    primer_dict[ name ][ 'MAPPING_SUMMARY' ]))
 
 
         primer_nr = re.sub(r'.*_(\d)',r'\1' , name)
@@ -1125,7 +1125,7 @@ def pretty_pdf_primer_data(c, y_offset, target_chrom, target_start, target_end, 
 
     return y_offset
 
-def pretty_primer_data(outfile, target_chrom, target_start, target_end,  passed_primers, fwd_primer=None, rev_primer=None  ):
+def pretty_primer_data(outfile, target_chrom, target_start, target_end,  primer_dict, fwd_primer=None, rev_primer=None  ):
     verbose_print("pretty_primer_data", 2)
 
 
@@ -1143,7 +1143,7 @@ def pretty_primer_data(outfile, target_chrom, target_start, target_end,  passed_
 
 #    pp.pprint( passed_primers )
 
-    for primer in sorted(passed_primers):
+    for primer in sorted( primer_dict ):
         if ( primer == 'FULLSEQ'):
             continue
 
@@ -1158,10 +1158,10 @@ def pretty_primer_data(outfile, target_chrom, target_start, target_end,  passed_
             picked_primer = 'Y'
 
         lines.append("\t".join([name, 
-                              "%.2f" % passed_primers[ name ][ "GC_PERCENT"], 
-                              "%.2f" % passed_primers[ name ][ "TM"],
-                              passed_primers[ name ][ "SEQ"], picked_primer,
-                              passed_primers[ name ][ 'MAPPING_SUMMARY' ]]))
+                              "%.2f" % primer_dict[ name ][ "GC_PERCENT"], 
+                              "%.2f" % primer_dict[ name ][ "TM"],
+                              primer_dict[ name ][ "SEQ"], picked_primer,
+                              primer_dict[ name ][ 'MAPPING_SUMMARY' ]]))
 
 
 
