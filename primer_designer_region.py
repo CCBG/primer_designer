@@ -21,6 +21,10 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 width, height = A4 #keep for later
 
+sys.path.append("/software/lib/python2.7/site-packages/pysam-0.7.5-py2.7-linux-x86_64.egg")
+import pysam
+
+
 TMP_FILES = []
 
 colours = [[255,   0,   0], # red
@@ -44,6 +48,7 @@ FLANK              = 500 # amount of bp on either side of the target to design p
 NR_PRIMERS         = 4   # Nr of primers to report back
 ALLOWED_MISMATCHES = 4   # Maximum nr of errors when mapping a primer back to the reference
 MAX_MAPPINGS       = 5   # Less or equal number of mappings to the reference what chromosomes mapped to are named 
+MAX_PRODUCT        = 500
 
 VERBOSE    =  20
 VERSION    =  '2.0-beta1'
@@ -60,11 +65,11 @@ def verbose_print( msg, level ):
 # output: sequence on one line.
 #
 # Kim Brugger (17 Aug 2016), contact: kbr@brugger.dk
-def fetch_region( chr, start, end ):
+def fetch_region( chrom, start, end ):
 
     verbose_print( "fetch_region", 2)
 
-    cmd = "%s faidx %s  %s:%d-%d " % ( SAMTOOLS, REFERENCE, chr, start, end )
+    cmd = "%s faidx %s  %s:%d-%d " % ( SAMTOOLS, REFERENCE, chrom, start, end )
     args = shlex.split( cmd )
     p = subprocess.Popen(args, stdout=subprocess.PIPE)
 
@@ -85,10 +90,10 @@ def fetch_region( chr, start, end ):
 # output: list of list of variants.
 #
 # Kim Brugger (17 Aug 2016)
-def fetch_known_SNPs( tabix_file, chr, start, end):
+def fetch_known_SNPs( tabix_file, chrom, start, end):
     verbose_print( "fetch_known_SNPs", 2)
 
-    cmd = "%s %s  %s:%d-%d " % ( TABIX, tabix_file, chr, start, end )
+    cmd = "%s %s  %s:%d-%d " % ( TABIX, tabix_file, chrom, start, end )
 
     verbose_print( cmd, 3)
 
@@ -133,7 +138,7 @@ PRIMER_MIN_THREE_PRIME_DISTANCE=3
 PRIMER_EXPLAIN_FLAG=1
 PRIMER_MAX_LIBRARY_MISPRIMING=12.00
 PRIMER_PAIR_MAX_LIBRARY_MISPRIMING=20.00
-PRIMER_PRODUCT_SIZE_RANGE=400-800
+PRIMER_PRODUCT_SIZE_RANGE=400-700
 PRIMER_NUM_RETURN=5
 PRIMER_MAX_END_STABILITY=9.0
 PRIMER_MAX_SELF_ANY_TH=45.00
@@ -337,6 +342,7 @@ def map_primers( region_id, primer3_dict):
     with open( primers_file, 'w+') as primerfasta:
 
         for i in range(0, 5):
+
             primer_left_id = "PRIMER_LEFT_%d_SEQUENCE" % i
             primer_right_id = "PRIMER_RIGHT_%d_SEQUENCE" % i
 
@@ -350,12 +356,16 @@ def map_primers( region_id, primer3_dict):
             left_id = "LEFT_%d" % i
             res[ left_id ] = {}
             res[ left_id ][ 'SEQ' ] = primer3_dict[ primer_left_id ]
+            res[ left_id ][ 'TM' ]  = float(primer3_dict[ "PRIMER_LEFT_%d_TM" % i ])
+            res[ left_id ][ 'GC_PERCENT' ]  = float(primer3_dict[ "PRIMER_LEFT_%d_GC_PERCENT" % i ])
             res[ left_id ][ 'CHR' ] = []
             res[ left_id ][ 'POS' ] = []
 
             right_id = "RIGHT_%d" % i
             res[ right_id ] = {}
             res[ right_id ][ 'SEQ' ] = primer3_dict[ primer_right_id ]
+            res[ right_id ][ 'TM' ]  = float(primer3_dict[ "PRIMER_RIGHT_%d_TM" % i ])
+            res[ right_id ][ 'GC_PERCENT' ]  = float(primer3_dict[ "PRIMER_RIGHT_%d_GC_PERCENT" % i ])
             res[ right_id ][ 'CHR' ] = []
             res[ right_id ][ 'POS' ] = []
 
@@ -431,7 +441,7 @@ def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
     verbose_print("pick_best_primers", 2)
 
     # Finally we are getting to the crux of this whole ordeal: Pick the best primers.
-    # I will be done using the following rules:
+    # It will be done using the following rules:
     # Unique MAPPING primers are best
     # primers closest to the region of interest
     # Primers generating odd products are eliminated.
@@ -558,7 +568,7 @@ def get_and_parse_arguments():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-c', '--chr')
+    parser.add_argument('-c', '--chrom')
     
     # NICK ADDED RANGE
     
@@ -585,11 +595,11 @@ def get_and_parse_arguments():
     args.target_flank = int( FLANK )
     
     if ( args.target_start == args.target_end):
-        args.target_id = "%s:%d" % ( args.chr, args.target_start)
-        args.filename  = "%s_%d" % (args.chr, args.target_start)
+        args.target_id = "%s:%d" % ( args.chrom, args.target_start)
+        args.filename  = "%s_%d" % (args.chrom, args.target_start)
     else:
-        args.target_id = "%s:%d-%d" % ( args.chr, args.target_start, args.target_end)
-        args.filename  = "%s_%d_%d" % (args.chr, args.target_start, args.target_end)
+        args.target_id = "%s:%d-%d" % ( args.chrom, args.target_start, args.target_end)
+        args.filename  = "%s_%d_%d" % (args.chrom, args.target_start, args.target_end)
 
 
     if ( args.output ):
@@ -604,10 +614,10 @@ def get_and_parse_arguments():
 
 #
 #  Tag up a sequence with the target-region, common SNPs found in the region
-#
 #  furthermore add a flanking sequence to the target to ensure that the primers are 
 #  long enough away from the target to generate sequene. Normally this is about 50bp 
 #  that is lost during sanger sequencing
+#
 #
 # Kim Brugger (17 Aug 2016)
 
@@ -649,7 +659,7 @@ def markup_sequence( target_sequence, target_chrom, target_start, target_end, ta
             continue
         
         #unpack dbSNP entry. 
-        (snp_chr, snp_pos, snp_id, snp_ref, snp_alt, common, vld, caf) = dbSNP
+        (snp_chrom, snp_pos, snp_id, snp_ref, snp_alt, common, vld, caf) = dbSNP
 
         snp_pos = int( snp_pos )
         if (snp_pos >= target_start - TARGET_LEAD and snp_pos <= target_end + TARGET_LEAD ):
@@ -735,7 +745,9 @@ def get_primer_seqs( primers ):
 # Collapse primer_tag_string where possigle, ie two primers does not overlap
 # And finally assign colours to each of the primer pairs.
 #
+# input target sequence and primers
 #
+# output: list of string with mapped primers, list of list with colours to apply
 #
 def make_mapped_primer_strings( target_sequence, primers):
 
@@ -749,7 +761,7 @@ def make_mapped_primer_strings( target_sequence, primers):
     # data struct for the align primer tagging, initiate with an list the length of the region we are looking at
     mapped_strings = []
     mapped_strings.append( [" "]*len( target_sequence ) )
-    # And their assign colour, by default everything is sat to -1 --> nothing in the PDF generation
+    # And then assign colour, by default everything is sat to -1 --> nothing in the PDF generation
     mapped_colours = []
     mapped_colours.append( [ -1 ]*len( target_sequence ) )
 
@@ -778,8 +790,6 @@ def make_mapped_primer_strings( target_sequence, primers):
             
         primer = tag 
 
-        primer = list( primer )
-
         mapping_index = 0
         while( 1 ):
             if (check_if_primer_clash ( mapped_strings[ mapping_index ], primer_pos, primer_pos + len( primer ))):
@@ -807,6 +817,13 @@ def make_mapped_primer_strings( target_sequence, primers):
     return mapped_strings, mapped_colours
 
 
+#
+# makes a pretty text output of target region and primers.
+#
+# input: target snp/target string, mapped primers, position of first base of the reference region
+#
+# output: string with nicely formatted data
+#
 def pretty_print_mappings( target_sequence, tagged_string, primer_strings, base1):
 
     lines = []
@@ -829,7 +846,20 @@ def pretty_print_mappings( target_sequence, tagged_string, primer_strings, base1
     return lines
 
 
-def pretty_pdf_mappings(top_offset,  target_sequence, tagged_string, primer_strings, primer_colours, base1):
+#
+# makes a pretty text output of target region and primers in a pdf canvas
+#
+# input: canvas, 
+#        offset (where to start writing) 
+#        target sequence
+#        target snp/target string, 
+#        mapped primers,
+#        colours to apply to the primer arrows
+#        position of first base of the reference region
+#
+# output: string with nicely formatted data
+#
+def pretty_pdf_mappings(c, top_offset,  target_sequence, tagged_string, primer_strings, primer_colours, base1):
     verbose_print("pretty_pdf_mappings", 2)
 
     lines = []
@@ -905,7 +935,36 @@ def pretty_pdf_mappings(top_offset,  target_sequence, tagged_string, primer_stri
 
     return top_offset
 
-def pretty_print_primer_data(primer3_results, passed_primers ):
+
+#
+# makes a pretty text output of primer informatino
+#
+# input: 
+#        offset (where to start writing) 
+#        target sequence
+#        target snp/target string, 
+#        mapped primers,
+#        colours to apply to the primer arrows
+#        position of first base of the reference region
+#
+# output: string with nicely formatted data
+#
+
+#
+# makes a pretty text output of primer informatino
+#
+# input: 
+#        pdf canvas
+#        offset (where to start writing) 
+#        target start
+#        target end
+#        primers
+#        best fwd primer
+#        best rev primer
+#
+# output: string with nicely formatted data
+#
+def pretty_print_primer_data(primer_dict, target_chrom, target_start, target_end ):
 
     lines = []
 
@@ -920,10 +979,10 @@ def pretty_print_primer_data(primer3_results, passed_primers ):
     lines.append( "_-=-"*15 +"_" )
 
 
-    if ( startpos == endpos ):
-        lines.append( " Primer design report for chr: %s position: %d" % (chr, startpos))
+    if ( target_start == target_end ):
+        lines.append( " Primer design report for chr: %s position: %d" % (target_chrom, target_start))
     else:
-        lines.append( " Primer design report for chr: %s range: %d-%d" % (chr, startpos, endpos))
+        lines.append( " Primer design report for chr: %s range: %d-%d" % (target_chrom, target_start, target_end))
 
     lines.append( "_-=-"*15 +"_")
     lines.append( "\n")
@@ -933,7 +992,7 @@ def pretty_print_primer_data(primer3_results, passed_primers ):
     lines.append( "_-=-"*15 +"_")
 
     primer_seqs = []
-    for primer in sorted(passed_primers):
+    for primer in sorted(primer_dict):
         if ( primer == 'FULLSEQ'):
             continue
 
@@ -943,10 +1002,10 @@ def pretty_print_primer_data(primer3_results, passed_primers ):
 
 
         lines.append( "%-10s %.2f  %.2f  %-25s %s" % (name, 
-                                                     float(primer3_results[ "PRIMER_" + name + "_GC_PERCENT"]), 
-                                                     float(primer3_results[ "PRIMER_" + name + "_TM"]),
-                                                     primer3_results[ "PRIMER_" + name + "_SEQUENCE"], 
-                                                     passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]))
+                                                     primer_dict[ name ][ "GC_PERCENT"], 
+                                                     primer_dict[ name ][ "TM"],
+                                                     primer_dict[ name ][  "SEQ"], 
+                                                     primer_dict[ name ][ 'MAPPING_SUMMARY' ]))
 
 
     lines.append( "" )
@@ -957,7 +1016,21 @@ def pretty_print_primer_data(primer3_results, passed_primers ):
 
 
 
-def pretty_pdf_primer_data(c, y_offset, primer3_results, passed_primers, fwd_primer=None, rev_primer=None ):
+#
+# makes a pretty text output of primer informatino
+#
+# input: 
+#        pdf canvas
+#        offset (where to start writing) 
+#        target start
+#        target end
+#        primers
+#        best fwd primer
+#        best rev primer
+#
+# output: string with nicely formatted data
+#
+def pretty_pdf_primer_data(c, y_offset, target_chrom, target_start, target_end, passed_primers, fwd_primer=None, rev_primer=None ):
     verbose_print("pretty_pdf_primer_data", 2)
 
 #    c.drawString(40 , y_offset, "_-=-"*15 +"_" )
@@ -965,10 +1038,11 @@ def pretty_pdf_primer_data(c, y_offset, primer3_results, passed_primers, fwd_pri
     y_offset -= 8
 
 
-    if ( startpos == endpos ):
-        c.drawString(40 , y_offset, "Primer design report for chr: %s position: %d" % (chr, startpos))
+    if ( target_start == target_end ):
+        c.drawString(40 , y_offset, "Primer design report for chr: %s position: %d" % (target_chrom, target_start))
     else:
-        c.drawString(40 , y_offset, "Primer design report for chr: %s range: %d-%d" % (chr, startpos, endpos))
+        c.drawString(40 , y_offset, "Primer design report for chr: %s range: %d-%d" % (target_chrom, 
+                                                                                       target_start, target_end))
             
     y_offset -= 8
     c.line(40,y_offset,width - 40 ,y_offset+2)
@@ -1009,11 +1083,20 @@ def pretty_pdf_primer_data(c, y_offset, primer3_results, passed_primers, fwd_pri
             picked_primer = 'Y'
 
 
+#        c.drawString(40 , y_offset, "%-10s %.2f  %.2f  %-25s %s            %s" % ("", 
+#                                                     float(primer3_results[ "PRIMER_" + name + "_GC_PERCENT"]), 
+#                                                     float(primer3_results[ "PRIMER_" + name + "_TM"]),
+#                                                     primer3_results[ "PRIMER_" + name + "_SEQUENCE"], picked_primer,
+#                                                     passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]))
+
+
+
         c.drawString(40 , y_offset, "%-10s %.2f  %.2f  %-25s %s            %s" % ("", 
-                                                     float(primer3_results[ "PRIMER_" + name + "_GC_PERCENT"]), 
-                                                     float(primer3_results[ "PRIMER_" + name + "_TM"]),
-                                                     primer3_results[ "PRIMER_" + name + "_SEQUENCE"], picked_primer,
-                                                     passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]))
+                                    passed_primers[ name ][ "GC_PERCENT"], 
+                                    passed_primers[ name ][ "TM"],
+                                    passed_primers[ name ][ "SEQ"], picked_primer,
+                                    passed_primers[ name ][ 'MAPPING_SUMMARY' ]))
+
 
         primer_nr = re.sub(r'.*_(\d)',r'\1' , name)
 
@@ -1042,7 +1125,7 @@ def pretty_pdf_primer_data(c, y_offset, primer3_results, passed_primers, fwd_pri
 
     return y_offset
 
-def pretty_primer_data(outfile, primer3_results, passed_primers, fwd_primer=None, rev_primer=None ):
+def pretty_primer_data(outfile, target_chrom, target_start, target_end,  passed_primers, fwd_primer=None, rev_primer=None  ):
     verbose_print("pretty_primer_data", 2)
 
 
@@ -1051,12 +1134,14 @@ def pretty_primer_data(outfile, primer3_results, passed_primers, fwd_primer=None
 
     lines = []
 
-    if ( target_start == target_endpos ):
-        lines.append("Primer design report for chr: %s position: %d" % (chr, target_start))
+    if ( target_start == target_end ):
+        lines.append("Primer design report for chr: %s position: %d" % (target_chrom, target_start))
     else:
-        lines.append("Primer design report for chr: %s range: %d-%d" % (chr, target_start, target_end ))
+        lines.append("Primer design report for chr: %s range: %d-%d" % (target_chrom, target_start, target_end ))
 
     lines.append("ID\t%GC\tTM\tPrimer sequence\tBest primer\tMapping(s)")
+
+#    pp.pprint( passed_primers )
 
     for primer in sorted(passed_primers):
         if ( primer == 'FULLSEQ'):
@@ -1073,10 +1158,19 @@ def pretty_primer_data(outfile, primer3_results, passed_primers, fwd_primer=None
             picked_primer = 'Y'
 
         lines.append("\t".join([name, 
-                              primer3_results[ "PRIMER_" + name + "_GC_PERCENT"], 
-                              primer3_results[ "PRIMER_" + name + "_TM"],
-                              primer3_results[ "PRIMER_" + name + "_SEQUENCE"], picked_primer,
-                              passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]]))
+                              "%.2f" % passed_primers[ name ][ "GC_PERCENT"], 
+                              "%.2f" % passed_primers[ name ][ "TM"],
+                              passed_primers[ name ][ "SEQ"], picked_primer,
+                              passed_primers[ name ][ 'MAPPING_SUMMARY' ]]))
+
+
+
+
+        # lines.append("\t".join([name, 
+        #                       primer3_results[ "PRIMER_" + name + "_GC_PERCENT"], 
+        #                       primer3_results[ "PRIMER_" + name + "_TM"],
+        #                       primer3_results[ "PRIMER_" + name + "_SEQUENCE"], picked_primer,
+        #                       passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]]))
 
 
 
@@ -1099,7 +1193,7 @@ def method_blurb():
     return lines
 
 
-def pretty_pdf_method(top_offset):
+def pretty_pdf_method(c, top_offset):
     verbose_print("pretty_pdf_method", 3)
 
     lines = method_blurb()
@@ -1109,6 +1203,37 @@ def pretty_pdf_method(top_offset):
     for line in lines:
         c.drawString(40, top_offset, line)
         top_offset -= 8
+
+
+
+def map_target_region_to_exon(chrom, target_start, target_end):
+
+    gene = {}
+    (coding_start, coding_end) = (target_start, target_end)
+    (coding_start, coding_end) = (None, None)
+
+    tbx = pysam.Tabixfile("gencode.v19.bed.gz")
+    for row in tbx.fetch(chrom, target_start - 10, target_end+10):
+        (exon_chrom, exon_start, exon_end, exon_gene, exon_nr, exon_transcript) = row.split("\t")
+        
+        exon_start = int( exon_start )
+        exon_end   = int( exon_end   )
+
+        if ( coding_start is  None or  coding_start > exon_start ):
+            coding_start = exon_start
+
+        if ( coding_end is None or coding_end < exon_end ):
+            coding_end = exon_end
+        
+#            print (str(row))
+
+#    print "New region is: %s:%d-%d" % ( chrom, coding_start, coding_end)
+    return ( chrom, coding_start, coding_end )
+
+
+
+
+
 
 #-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 #
@@ -1120,31 +1245,42 @@ def main():
 
     args = get_and_parse_arguments()
 
-    target_chrom    = args.chr
+    target_chrom    = args.chrom
     target_start    = args.target_start
     target_end      = args.target_end
     target_flank    = args.target_flank
     target_id       = args.target_id
     target_filename = args.filename
 
+    ( exon_chrom, exon_start, exon_end) = map_target_region_to_exon( target_chrom, target_start, target_end)
+
+    if ( exon_start is not None and  exon_end is not None  and exon_end - exon_start + 1 < MAX_PRODUCT):
+        verbose_print("Changing region to an exonic region (%s:%d-%d)" % (exon_chrom, exon_start, exon_end), 1)
+        target_start = exon_start
+        target_end   = exon_end
+
+#    exit()
+
+
     target_sequence                   =   fetch_region( target_chrom, target_start - target_flank, target_end + target_flank     )
     (tagged_sequence, tagged_region)  =   markup_sequence(target_sequence, target_chrom, target_start, target_end, target_flank )
 
     primer3_results  = run_primer3( target_id , tagged_sequence, "%s_%d.primer3" % ( target_chrom, target_start))
-    primers   = map_primers( target_id, primer3_results)
+    primer_dict   = map_primers( target_id, primer3_results)
 #    pp.pprint( passed_primers )
 
-    best_fwd_primer, best_rev_primer = pick_best_primers(primers, target_chrom, target_start, target_end)
-    (mapped_primer_strings, mapped_primer_colours) = make_mapped_primer_strings( target_sequence, primers)
+    best_fwd_primer, best_rev_primer = pick_best_primers(primer_dict, target_chrom, target_start, target_end)
+    (mapped_primer_strings, mapped_primer_colours) = make_mapped_primer_strings( target_sequence, primer_dict)
 
 #    pp.pprint( mapped_primer_strings )
 #    pp.pprint( mapped_primer_colours )
 
-    lines = pretty_print_mappings( target_sequence, tagged_region, mapped_primer_strings, target_start - FLANK)
 
-    pretty_primer_data("%s.txt" % target_filename, primer3_results, primers, best_fwd_primer, best_rev_primer )
+    pretty_primer_data("%s.txt" % target_filename, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
 
     if (  args.text_output ):
+        lines  = pretty_print_primer_data( primer_dict, target_chrom, target_start, target_end )
+        lines += pretty_print_mappings( target_sequence, tagged_region, mapped_primer_strings, target_start - FLANK)
         print "\n".join(lines)
         exit()
 
@@ -1157,12 +1293,12 @@ def main():
         font = TTFont('mono', '/usr/share/fonts/truetype/ttf-liberation/LiberationMono-Regular.ttf')
         pdfmetrics.registerFont( font )
         c.setFont('mono', 7)
-        top_offset = pretty_pdf_primer_data(c, height - 30, primer3_results, passed_primers, best_fwd_primer, best_rev_primer )
+        top_offset = pretty_pdf_primer_data(c, height - 30, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
             
         c.setFont('mono', 8)
-        pretty_pdf_mappings(top_offset,  target_sequence, tagged_string, mapped_primer_strings, mapped_primer_colours, target_start - FLANK)
+        pretty_pdf_mappings(c, top_offset,  target_sequence, tagged_region, mapped_primer_strings, mapped_primer_colours, target_start - FLANK)
 
-        pretty_pdf_method(top_offset)
+        pretty_pdf_method(c, top_offset)
 
         c.showPage()
         c.save()
