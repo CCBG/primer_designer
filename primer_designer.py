@@ -30,6 +30,9 @@ REFERENCE  = '/refs/human_1kg/human_g1k_v37.fasta '
 TABIX      = '/software/bin/tabix '
 SMALT      = '/software/bin/smalt-0.7.6 '
 PRIMER3    = '/software/bin/primer3_core '
+BLASTN     = '/software/packages/ncbi-blast-2.5.0+/bin/blastn'
+BLAST_DB   = '/refs/human_1kg/human_g1k_v37.fasta'
+
 
 # default parameters, can be overridden by the user (perhaps)
 FLANK              = 500
@@ -275,7 +278,7 @@ def run_primer3( seq_id, seq, primer3_file = ""):
 
 
 
-def check_primers( region_id, target_region, primer3_dict):
+def check_primers_smalt( region_id, target_region, primer3_dict):
     verbose_print( "check_primers", 3)
 
 
@@ -378,6 +381,116 @@ def check_primers( region_id, target_region, primer3_dict):
 
 
     return res
+
+
+def check_primers_blast( region_id, target_region, primer3_dict):
+    verbose_print( "check_primers", 3)
+
+    primers_file = region_id + "_p3seq.fasta"
+
+    with open( primers_file, 'w+') as primerfasta:
+
+        primerfasta.write(">FULLSEQ\n" + target_region + "\n")
+
+        for i in range(0, 5):
+            pl_id = "PRIMER_LEFT_%d_SEQUENCE" % i
+            pr_id = "PRIMER_RIGHT_%d_SEQUENCE" % i
+
+            if ( pr_id not in primer3_dict or pl_id not in primer3_dict):
+                continue
+
+            primerfasta.write(">%s\n%s\n" % (pl_id, primer3_dict[ pl_id ]))
+            primerfasta.write(">%s\n%s\n" % (pr_id, primer3_dict[ pr_id ]))
+
+        primerfasta.close()
+
+    blastn_results = region_id + ".blastn"
+    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results + " 2> /dev/null"
+    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results 
+
+    cmd = "{blastn} -db {blast_db} -word_size 8 -outfmt 7 -query {query} -out {outfile}".format(blastn   = BLASTN, 
+                                                                                                blast_db = BLASTDB, 
+                                                                                                query    = primers_file,
+                                                                                                outfile  = blastn_results)
+
+    print cmd
+    subprocess.call(cmd, shell=True)
+
+
+    id_word = "FULLSEQ"
+    match = {}
+    smalt_report = []
+    query_region = []
+
+    res = dict()
+
+    with open(smalt_results, 'rU') as smalt_output:
+
+        for line in smalt_output:
+    
+            if (line.startswith("@")):
+                continue
+       
+            line = line.rstrip("\n")
+            fields = line.split("\t")
+#            pp.pprint( fields )
+            match[ 'name'           ] = fields[  0  ] #mapping_score
+            match[ 'chromosome'     ] = fields[  2  ] #chromosome
+            match[ 'pos'            ] = fields[  3  ] #mapping position
+            match[ 'length'         ] = len(fields[  9  ]) #mapping_score
+            match[ 'length_matched' ] = int(re.sub("AS:i:", '', fields[  12 ])) #mapping_length
+
+
+            match_id     = fields[ 0 ] 
+            match_chr    = fields[ 2 ]
+            match_pos    = fields[ 3 ]
+            match_length = len(fields[ 9 ])
+            match_mathes = int(re.sub("AS:i:", '', fields[  12 ]))
+
+            if ( match_id not in res ):
+                res[ match_id ] = dict()
+                res[ match_id ][ 'CHR' ] = []
+                res[ match_id ][ 'POS' ] = []
+
+
+
+            if (match['length'] <= match['length_matched'] + ALLOWED_MISMATCHES):
+                res[ match_id ][ 'CHR' ].append( match_chr )
+                res[ match_id ][ 'POS' ].append( match_pos )
+
+
+
+#            smalt_report.append()
+    
+
+
+    for primer  in  res.keys() :
+        if (primer == 'FULLSEQ'):
+            continue 
+
+        res[ primer ]['MAPPING_SUMMARY'] = 'unique mapping'
+
+
+        nr_of_chromosomes = len(set(res[ primer ][ 'CHR' ]))
+        nr_of_mappings    = len( res[ primer ][ 'POS' ])
+
+        if (nr_of_mappings > 1 and nr_of_mappings <= MAX_MAPPINGS ):
+            res[ primer ]['MAPPING_SUMMARY'] = '%d mappings' % nr_of_mappings
+            res[ primer ][ 'MAPPING_SUMMARY' ] += " to chromosomes: " + ",".join(res[ primer ][ 'CHR' ])
+
+
+        elif (nr_of_mappings >= MAX_MAPPINGS ):
+            res[ primer ]['MAPPING_SUMMARY'] = '%d mappings' % nr_of_mappings
+            res[ primer ][ 'MAPPING_SUMMARY' ] += " on %d chromosomes" % nr_of_chromosomes
+
+
+
+#    pp.pprint( smalt_report)
+#    pp.pprint( res )
+
+
+    return res
+
 
 def revDNA( string ):
     verbose_print( "revDNA", 5)
@@ -919,7 +1032,8 @@ target_sequence                   =   fetch_region( chr, pos - FLANK, pos + FLAN
 
 
 primer3_results  = run_primer3( region_id , tagged_sequence, "%s_%d.primer3" % ( chr, pos))
-passed_primers   = check_primers( region_id, target_sequence, primer3_results)
+#passed_primers   = check_primers_smalt( region_id, target_sequence, primer3_results)
+passed_primers   = check_primers_blast( region_id, target_sequence, primer3_results)
 #pp.pprint( passed_primers )
 passed_primer_seqs = extract_passed_primer_seqs( primer3_results, passed_primers )
 
