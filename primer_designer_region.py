@@ -48,14 +48,14 @@ FLANK              = 500 # amount of bp on either side of the target to design p
 NR_PRIMERS         = 4   # Nr of primers to report back
 ALLOWED_MISMATCHES = 4   # Maximum nr of errors when mapping a primer back to the reference
 MAX_MAPPINGS       = 5   # Less or equal number of mappings to the reference what chromosomes mapped to are named 
-MAX_PRODUCT        = 500
+MAX_PRODUCT        = 00
 
 VERBOSE    =  20
 VERSION    =  '2.0-beta1'
 
 def verbose_print( msg, level ):
     if ( level <= VERBOSE ):
-        print msg
+        sys.stderr.write( msg+ "\n" )
 
 #
 # Extracts a DNA region from the reference genome
@@ -138,7 +138,7 @@ PRIMER_MIN_THREE_PRIME_DISTANCE=3
 PRIMER_EXPLAIN_FLAG=1
 PRIMER_MAX_LIBRARY_MISPRIMING=12.00
 PRIMER_PAIR_MAX_LIBRARY_MISPRIMING=20.00
-PRIMER_PRODUCT_SIZE_RANGE=400-700
+PRIMER_PRODUCT_SIZE_RANGE=200-800
 PRIMER_NUM_RETURN=5
 PRIMER_MAX_END_STABILITY=9.0
 PRIMER_MAX_SELF_ANY_TH=45.00
@@ -150,7 +150,7 @@ PRIMER_MAX_TEMPLATE_MISPRIMING_TH=40.00
 PRIMER_PAIR_MAX_TEMPLATE_MISPRIMING_TH=70.00
 PRIMER_MIN_SIZE=18
 PRIMER_OPT_SIZE=20
-PRIMER_MAX_SIZE=25
+PRIMER_MAX_SIZE=22
 PRIMER_MIN_TM=58.0
 PRIMER_OPT_TM=60.0
 PRIMER_MAX_TM=62.0
@@ -330,7 +330,7 @@ def run_primer3( seq_id, seq, primer3_file = ""):
 # output: dict of primers and their nr of mappings to the genome
 #
 # Kim Brugger (17 Aug 2016)
-def map_primers( region_id, primer3_dict):
+def map_primers( region_id, primer3_dict, target_chrom, target_start, target_end):
     verbose_print( "check_primers", 2)
 
     res = dict()
@@ -402,8 +402,8 @@ def map_primers( region_id, primer3_dict):
             match_id        = re.sub(r'PRIMER_', '', match_id)
             match_id        = re.sub(r'_SEQUENCE', '', match_id)
 
-            match_chr       = fields[ 2 ]
-            match_pos       = fields[ 3 ]
+            match_chrom     = fields[ 2 ]
+            match_pos       = int(fields[ 3 ])
             match_flag      = fields[ 1 ]
             
             match_seq       = res[ match_id ][ 'SEQ' ]
@@ -411,13 +411,25 @@ def map_primers( region_id, primer3_dict):
             match_bp_agree = int(re.sub("AS:i:", '', fields[  12 ]))
 
             if (match_length <= match_bp_agree + ALLOWED_MISMATCHES):
-                res[ match_id ][ 'CHR' ].append( match_chr )
+                res[ match_id ][ 'CHR' ].append( match_chrom )
                 res[ match_id ][ 'POS' ].append( match_pos )
+
+
+            if ( target_chrom == match_chrom and 
+                 target_start < match_pos and
+                 target_end  > match_pos ):
+                res[ match_id ][ 'TARGET_POS'   ] = match_pos
+                res[ match_id ][ 'TARGET_CHROM' ] = match_chrom
 
 
 
     # See if the primers map uniquely or not.
+    # If a primer does not map to the region of interest (low complexity etc) remove it.                
     for primer  in  res.keys() :
+
+        if 'TARGET_CHROM' not in res[ primer ]:
+            del res[ primer ]
+            continue
 
         res[ primer ]['MAPPING_SUMMARY'] = 'unique mapping'
 
@@ -426,7 +438,7 @@ def map_primers( region_id, primer3_dict):
 
         if (nr_of_mappings > 1 and nr_of_mappings <= MAX_MAPPINGS ):
             res[ primer ]['MAPPING_SUMMARY'] = '%d mappings' % nr_of_mappings
-            res[ primer ][ 'MAPPING_SUMMARY' ] += " to chromosomes: " + ",".join(set(res[ primer ][ 'CHR' ]))
+            res[ primer ][ 'MAPPING_SUMMARY' ] += " to chromosome: " + ",".join(set(res[ primer ][ 'CHR' ]))
 
 
         elif (nr_of_mappings >= MAX_MAPPINGS ):
@@ -463,6 +475,7 @@ def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
 
         if ( not primer_data[ primer ][ 'CHR' ] or primer_data[ primer ][ 'CHR' ][ 0 ] != chromo ):
             verbose_print( "No mapping or Unique mapping to different chromosome (%s). Should never happen! " % primer, 5)
+            pp.pprint( primer_data[ primer ] )
             continue
 
         if  (primer.find( 'LEFT' ) >= 0):
@@ -578,7 +591,8 @@ def get_and_parse_arguments():
 
     parser.add_argument('-o', '--output')
     parser.add_argument('-f', '--flank')
-    parser.add_argument('-t', '--text_output')
+    parser.add_argument('-t', '--text_output', action="store_true")
+    parser.add_argument('-w', '--website_output', action="store_true")
 
     args = parser.parse_args()
 
@@ -647,8 +661,13 @@ def markup_sequence( target_sequence, target_chrom, target_start, target_end, ta
 #    return sequence
 #   exit ()
 
-    dbSNPs = fetch_known_SNPs( '/software/dev/projects/local_dbsnp/annots-rsIDs-dbSNPv144.20150605.tab.gz', 
-                               target_chrom, target_start - target_flank, target_end + target_flank )
+#    dbSNPs = fetch_known_SNPs( '/software/dev/projects/local_dbsnp/annots-rsIDs-dbSNPv144.20150605.tab.gz', 
+#                               target_chrom, target_start - target_flank, target_end + target_flank )
+
+
+    dbSNPs = fetch_known_SNPs( '/refs/human_1kg/annots-rsIDs-dbSNPv144.20150605.tab.gz', target_chrom, 
+                                                                                         target_start - target_flank, 
+                                                                                         target_end + target_flank )
 
     masked_positions = []
 
@@ -682,6 +701,7 @@ def markup_sequence( target_sequence, target_chrom, target_start, target_end, ta
                     continue
 
                 sequence[ mask_pos + i  ] = ' <' + sequence[ mask_pos + i ] + '> '
+#                sequence[ mask_pos + i  ] = 
                 tags[  mask_pos + i  ] = 'X'
 
             else:
@@ -988,7 +1008,7 @@ def pretty_print_primer_data(primer_dict, target_chrom, target_start, target_end
     lines.append( "\n")
 
 #    lines.append( "\t".join(['ID', '%GC', 'TM', 'Sequence']))
-    lines.append( "ID         %GC    TM     Primer sequence           Mapping(s)    ")
+    lines.append( "ID         POS             %GC    TM     Primer sequence           Mapping(s)    ")
     lines.append( "_-=-"*15 +"_")
 
     primer_seqs = []
@@ -1000,12 +1020,12 @@ def pretty_print_primer_data(primer_dict, target_chrom, target_start, target_end
         name = re.sub(r'PRIMER_', '', name)
         name = re.sub(r'_SEQUENCE', '', name)
 
-
-        lines.append( "%-10s %.2f  %.2f  %-25s %s" % (name, 
-                                                     primer_dict[ name ][ "GC_PERCENT"], 
-                                                     primer_dict[ name ][ "TM"],
-                                                     primer_dict[ name ][  "SEQ"], 
-                                                     primer_dict[ name ][ 'MAPPING_SUMMARY' ]))
+        lines.append( "%-10s %-14s  %.2f  %.2f  %-25s %s" % (name,
+                                                            "%s:%d" % (primer_dict[ name ][ "TARGET_CHROM"], primer_dict[ name ][ "TARGET_POS"]),
+                                                            primer_dict[ name ][ "GC_PERCENT"], 
+                                                            primer_dict[ name ][ "TM"],
+                                                            primer_dict[ name ][  "SEQ"], 
+                                                            primer_dict[ name ][ 'MAPPING_SUMMARY' ]))
 
 
     lines.append( "" )
@@ -1048,7 +1068,7 @@ def pretty_pdf_primer_data(c, y_offset, target_chrom, target_start, target_end, 
     c.line(40,y_offset,width - 40 ,y_offset+2)
     y_offset -= 16
 
-    c.drawString(40 , y_offset, "ID         %GC    TM     Primer sequence           Best primer  Mapping(s)    ")
+    c.drawString(40 , y_offset, "ID         POS             %GC    TM     Primer sequence           Mapping(s)    ")
     y_offset -= 8
     c.line(40,y_offset,width - 40 ,y_offset+2)
     y_offset -= 8
@@ -1070,32 +1090,18 @@ def pretty_pdf_primer_data(c, y_offset, target_chrom, target_start, target_end, 
         if (name == "RIGHT_0"):
             y_offset -= 8
 
-
-#        lines.append( "\t".join([name, 
-#                         primer3_results[ "PRIMER_" + name + "_GC_PERCENT"], 
-#                         primer3_results[ "PRIMER_" + name + "_TM"],
-#                         primer3_results[ "PRIMER_" + name + "_SEQUENCE"], 
-#                         passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]]))
-
         picked_primer = ' '
 
         if ( fwd_primer == primer or rev_primer == primer):
             picked_primer = 'Y'
 
-
-#        c.drawString(40 , y_offset, "%-10s %.2f  %.2f  %-25s %s            %s" % ("", 
-#                                                     float(primer3_results[ "PRIMER_" + name + "_GC_PERCENT"]), 
-#                                                     float(primer3_results[ "PRIMER_" + name + "_TM"]),
-#                                                     primer3_results[ "PRIMER_" + name + "_SEQUENCE"], picked_primer,
-#                                                     passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]))
-
-
-
-        c.drawString(40 , y_offset, "%-10s %.2f  %.2f  %-25s %s            %s" % ("", 
+        c.drawString(40 , y_offset, "%-10s %-14s  %.2f  %.2f  %-25s %s            %s" % ("", 
+                                    "%s:%d" % (primer_dict[ name ][ "TARGET_CHROM"], primer_dict[ name ][ "TARGET_POS"]),
                                     primer_dict[ name ][ "GC_PERCENT"], 
                                     primer_dict[ name ][ "TM"],
                                     primer_dict[ name ][ "SEQ"], picked_primer,
                                     primer_dict[ name ][ 'MAPPING_SUMMARY' ]))
+
 
 
         primer_nr = re.sub(r'.*_(\d)',r'\1' , name)
@@ -1128,8 +1134,10 @@ def pretty_pdf_primer_data(c, y_offset, target_chrom, target_start, target_end, 
 def pretty_primer_data(outfile, target_chrom, target_start, target_end,  primer_dict, fwd_primer=None, rev_primer=None  ):
     verbose_print("pretty_primer_data", 2)
 
+    fh = None
 
-    fh = open( outfile, 'w')
+    if outfile:
+        fh = open( outfile, 'w')
 
 
     lines = []
@@ -1139,7 +1147,7 @@ def pretty_primer_data(outfile, target_chrom, target_start, target_end,  primer_
     else:
         lines.append("Primer design report for chr: %s range: %d-%d" % (target_chrom, target_start, target_end ))
 
-    lines.append("ID\t%GC\tTM\tPrimer sequence\tBest primer\tMapping(s)")
+    lines.append("ID\tPosition\t%GC\tTM\tPrimer sequence\tBest primer\tMapping(s)")
 
 #    pp.pprint( passed_primers )
 
@@ -1158,6 +1166,7 @@ def pretty_primer_data(outfile, target_chrom, target_start, target_end,  primer_
             picked_primer = 'Y'
 
         lines.append("\t".join([name, 
+                              "%s:%d" % (primer_dict[ name ][ "TARGET_CHROM"], primer_dict[ name ][ "TARGET_POS"]),
                               "%.2f" % primer_dict[ name ][ "GC_PERCENT"], 
                               "%.2f" % primer_dict[ name ][ "TM"],
                               primer_dict[ name ][ "SEQ"], picked_primer,
@@ -1176,8 +1185,11 @@ def pretty_primer_data(outfile, target_chrom, target_start, target_end,  primer_
 
 
     lines.append("\n")
-    fh.write("\n".join( lines ))
-    fh.close()
+    if ( fh ):
+        fh.write("\n".join( lines ))
+        fh.close()
+    else:
+        print "\n".join( lines )
 
 
 
@@ -1211,8 +1223,8 @@ def map_target_region_to_exon(chrom, target_start, target_end):
     gene = {}
     (coding_start, coding_end) = (target_start, target_end)
     (coding_start, coding_end) = (None, None)
-
-    tbx = pysam.Tabixfile("gencode.v19.bed.gz")
+    path = os.path.dirname(os.path.realpath(__file__))
+    tbx = pysam.Tabixfile(path + "/gencode.v19.bed.gz")
     for row in tbx.fetch(chrom, target_start - 10, target_end+10):
         (exon_chrom, exon_start, exon_end, exon_gene, exon_nr, exon_transcript) = row.split("\t")
         
@@ -1266,8 +1278,9 @@ def main():
     (tagged_sequence, tagged_region)  =   markup_sequence(target_sequence, target_chrom, target_start, target_end, target_flank )
 
     primer3_results  = run_primer3( target_id , tagged_sequence, "%s_%d.primer3" % ( target_chrom, target_start))
-    primer_dict   = map_primers( target_id, primer3_results)
-#    pp.pprint( passed_primers )
+    primer_dict   = map_primers( target_id, primer3_results, target_chrom, target_start - target_flank, target_end+ target_flank)
+#    pp.pprint( primer_dict )
+    
 
     best_fwd_primer, best_rev_primer = pick_best_primers(primer_dict, target_chrom, target_start, target_end)
     (mapped_primer_strings, mapped_primer_colours) = make_mapped_primer_strings( target_sequence, primer_dict)
@@ -1276,11 +1289,14 @@ def main():
 #    pp.pprint( mapped_primer_colours )
 
 
-    pretty_primer_data("%s.txt" % target_filename, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
 
-    if (  args.text_output ):
+    if (  args.website_output ):
+        pretty_primer_data(None, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
+
+    elif (  args.text_output ):
         lines  = pretty_print_primer_data( primer_dict, target_chrom, target_start, target_end )
         lines += pretty_print_mappings( target_sequence, tagged_region, mapped_primer_strings, target_start - FLANK)
+        pretty_primer_data("%s.txt" % target_filename, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
         print "\n".join(lines)
         exit()
 
@@ -1303,9 +1319,9 @@ def main():
         c.showPage()
         c.save()
 
-        for tmp_filename in     TMP_FILES:
-            print "deleting tmp file: %s " % tmp_filename
-            os.remove( tmp_filename )
+    for tmp_filename in TMP_FILES:
+        verbose_print( "deleting tmp file: %s " % tmp_filename, 2)
+#        os.remove( tmp_filename )
 
 
 
