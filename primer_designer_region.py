@@ -47,12 +47,13 @@ BLAST_DB   = '/refs/human_1kg/human_g1k_v37.fasta'
 
 
 # default parameters, can be overridden by the user (perhaps)
-TARGET_LEAD        = 50
-FLANK              = 500 # amount of bp on either side of the target to design primers in
-NR_PRIMERS         = 4   # Nr of primers to report back
-ALLOWED_MISMATCHES = 4   # Maximum nr of errors when mapping a primer back to the reference
-MAX_MAPPINGS       = 5   # Less or equal number of mappings to the reference what chromosomes mapped to are named 
-MAX_PRODUCT        = 00
+TARGET_LEAD          = 50
+FLANK                = 500 # amount of bp on either side of the target to design primers in
+NR_PRIMERS           = 4   # Nr of primers to report back
+ALLOWED_MISMATCHES   = 4   # Maximum nr of errors when mapping a primer back to the reference
+MAX_MAPPINGS         = 5   # Less or equal number of mappings to the reference what chromosomes mapped to are named 
+MAX_PRODUCT          = 1200
+MAX_3_PRIME_MISMATCH = 2
 
 VERBOSE    =  20
 VERSION    =  '2.0-beta1'
@@ -490,6 +491,7 @@ def map_primers_blast( region_id, primer3_dict, target_chrom, target_start, targ
             res[ left_id ][ 'GC_PERCENT' ]  = float(primer3_dict[ "PRIMER_LEFT_%d_GC_PERCENT" % i ])
             res[ left_id ][ 'CHR' ] = []
             res[ left_id ][ 'POS' ] = []
+            res[ left_id ][ 'STRAND' ] = []
 
             right_id = "RIGHT_%d" % i
             res[ right_id ] = {}
@@ -498,17 +500,18 @@ def map_primers_blast( region_id, primer3_dict, target_chrom, target_start, targ
             res[ right_id ][ 'GC_PERCENT' ]  = float(primer3_dict[ "PRIMER_RIGHT_%d_GC_PERCENT" % i ])
             res[ right_id ][ 'CHR' ] = []
             res[ right_id ][ 'POS' ] = []
+            res[ right_id ][ 'STRAND' ] = []
 
 
         primerfasta.close()
 
     blastn_results = region_id + ".blastn"
-    pp.pprint( res )
+#    pp.pprint( res )
     TMP_FILES.append( blastn_results )
 
 #    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results + " 2> /dev/null"
 
-    cmd = "{blastn} -db {blast_db} -word_size 8 -outfmt 7 -query {query} -out {outfile}".format(blastn   = BLASTN, 
+    cmd = "{blastn} -db {blast_db} -word_size 7 -outfmt 7 -query {query} -out {outfile}".format(blastn   = BLASTN, 
                                                                                                 blast_db = BLAST_DB, 
                                                                                                 query    = primers_file,
                                                                                                 outfile  = blastn_results)
@@ -546,19 +549,36 @@ def map_primers_blast( region_id, primer3_dict, target_chrom, target_start, targ
             seq             = res[ match_id ][ 'SEQ' ]
             seq_length      = len( seq )
             match_length    = int( fields[ 3 ])
+            align_end       = int( fields[ 7 ])
+            
             match_disagree  = int( fields[ 4 ])
             match_gaps      = int( fields[ 5 ])
+            match_bp_agree  = seq_length - ( seq_length - match_length) - match_disagree 
+
+            match_strand    = "plus"
+            if ( int( fields[ 8 ] ) > int( fields[ 9 ])):
+                match_strand    = "minus"
+                match_pos       = int(fields[ 9 ])
+
+
+            # Check that the 3' end of the primer looks good
+            if ( seq_length > align_end + MAX_3_PRIME_MISMATCH ):
+                continue
+
 
             if ( match_gaps ):
                 continue 
 
-            match_bp_agree  = seq_length - ( seq_length - match_length) - match_disagree 
+
 #        print " %d -- %d " % ( seq_length, match_bp_agree )
 
 
             if (seq_length <= match_bp_agree + ALLOWED_MISMATCHES):
                 res[ match_id ][ 'CHR' ].append( match_chrom )
                 res[ match_id ][ 'POS' ].append( match_pos )
+                res[ match_id ][ 'STRAND'].append( match_strand )
+
+
 
             if ( target_chrom == match_chrom and 
                  target_start < match_pos and
@@ -601,6 +621,8 @@ def map_primers_blast( region_id, primer3_dict, target_chrom, target_start, targ
 
 def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
     verbose_print("pick_best_primers", 2)
+
+    pp.pprint( primer_data )
 
     # Finally we are getting to the crux of this whole ordeal: Pick the best primers.
     # It will be done using the following rules:
@@ -1158,7 +1180,7 @@ def pretty_print_primer_data(primer_dict, target_chrom, target_start, target_end
     lines.append( "\n")
 
 #    lines.append( "\t".join(['ID', '%GC', 'TM', 'Sequence']))
-    lines.append( "ID         POS             %GC    TM     Primer sequence           Mapping(s)    ")
+    lines.append( "ID         POS             %GC    TM     Primer sequence      Best primer     Mapping(s)    ")
     lines.append( "_-=-"*15 +"_")
 
     primer_seqs = []
@@ -1428,8 +1450,8 @@ def main():
     (tagged_sequence, tagged_region)  =   markup_sequence(target_sequence, target_chrom, target_start, target_end, target_flank )
 
     primer3_results  = run_primer3( target_id , tagged_sequence, "%s_%d.primer3" % ( target_chrom, target_start))
-    primer_dict   = map_primers_smalt( target_id, primer3_results, target_chrom, target_start - target_flank, target_end+ target_flank)
-#    primer_dict   = map_primers_blast( target_id, primer3_results, target_chrom, target_start - target_flank, target_end+ target_flank)
+#    primer_dict   = map_primers_smalt( target_id, primer3_results, target_chrom, target_start - target_flank, target_end+ target_flank)
+    primer_dict   = map_primers_blast( target_id, primer3_results, target_chrom, target_start - target_flank, target_end+ target_flank)
 #    pp.pprint( primer_dict )
     
 
