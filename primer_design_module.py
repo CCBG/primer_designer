@@ -30,25 +30,9 @@ colours = [[255,   0,   0], # red
            [255, 255,   0], #Dark Green
            [100, 255, 100]] # Yellow, crap!
 
-# External tools we use 
-SMALT      = '/software/bin/smalt-0.7.6 '
-PRIMER3    = '/software/bin/primer3_core '
 
 
-
-# default parameters, can be overridden by the user (perhaps)
-TARGET_LEAD          = 50
-FLANK                = 500 # amount of bp on either side of the target to design primers in
-NR_PRIMERS           = 4   # Nr of primers to report back
-ALLOWED_MISMATCHES   = 4   # Maximum nr of errors when mapping a primer back to the reference
-MAX_MAPPINGS         = 5   # Less or equal number of mappings to the reference what chromosomes mapped to are named 
-MAX_PRODUCT          = 1200
-MAX_3_PRIME_MISMATCH = 2
-
-VERSION    =  '2.0-beta1'
-
-
-import primer_design.core
+import primer_design.config as config
 
 
 
@@ -81,15 +65,15 @@ def markup_sequence( target_sequence, target_chrom, target_start, target_end, ta
         if (x >= start and x <= end):
             tags[x] = '*'
 
-        if x in range(start - TARGET_LEAD, start) or x in range(end, end + TARGET_LEAD):
+        if x in range(start - config.TARGET_LEAD, start) or x in range(end, end + config.TARGET_LEAD):
             tags[x] = '-'
     #return tags
         
 
     core.verbose_print( "::::: %d - %d, %d" % (target_start, target_end, target_flank), 5)
     # Tag the target sequence, regardless of the nature of the variant only one (1) base is tagged as the target.
-    sequence[ target_flank - TARGET_LEAD ] = ' [' + target_sequence [ target_flank - TARGET_LEAD ]
-    sequence[(- target_flank + TARGET_LEAD) -1 ] = sequence [ (- target_flank + TARGET_LEAD) -1 ] + '] '
+    sequence[ target_flank - config.TARGET_LEAD ] = ' [' + target_sequence [ target_flank - config.TARGET_LEAD ]
+    sequence[(- target_flank + config.TARGET_LEAD) -1 ] = sequence [ (- target_flank + config.TARGET_LEAD) -1 ] + '] '
 
 #    return sequence
 #   exit ()
@@ -114,7 +98,7 @@ def markup_sequence( target_sequence, target_chrom, target_start, target_end, ta
         (snp_chrom, snp_pos, snp_id, snp_ref, snp_alt, common, vld, caf) = dbSNP
 
         snp_pos = int( snp_pos )
-        if (snp_pos >= target_start - TARGET_LEAD and snp_pos <= target_end + TARGET_LEAD ):
+        if (snp_pos >= target_start - config.TARGET_LEAD and snp_pos <= target_end + config.TARGET_LEAD ):
             continue
 
         if ( common == '1'):
@@ -190,135 +174,6 @@ def map_target_region_to_exon(chrom, target_start, target_end):
 #    print "New region is: %s:%d-%d" % ( chrom, coding_start, coding_end)
     return ( chrom, coding_start, coding_end )
 
-
-
-def map_primers_smalt( region_id, primer3_dict, target_chrom, target_start, target_end):
-    """
-
-    Maps primers to the reference using smalt to check where they map.
- 
-    input: region-ID, primer3_dict
-    
-    output: dict of primers and their nr of mappings to the genome
-    
-    Kim Brugger (17 Aug 2016)
-    """    
-
-    core.verbose_print( "check_primers", 2)
-
-    res = dict()
-
-    primers_file = region_id + "_p3seq.fasta"
-
-    core.add_new_tmp_file( primers_file )
-
-    with open( primers_file, 'w+') as primerfasta:
-
-        for i in range(0, 5):
-
-            primer_left_id = "PRIMER_LEFT_%d_SEQUENCE" % i
-            primer_right_id = "PRIMER_RIGHT_%d_SEQUENCE" % i
-
-            if ( primer_right_id not in primer3_dict or primer_left_id not in primer3_dict):
-                continue
-
-            primerfasta.write(">%s\n%s\n" % (primer_left_id, primer3_dict[ primer_left_id ]))
-            primerfasta.write(">%s\n%s\n" % (primer_right_id, primer3_dict[ primer_right_id ]))
-
-            # Store the primer seqs in the res dict as we will needthem later in the program
-            left_id = "LEFT_%d" % i
-            res[ left_id ] = {}
-            res[ left_id ][ 'SEQ' ] = primer3_dict[ primer_left_id ]
-            res[ left_id ][ 'TM' ]  = float(primer3_dict[ "PRIMER_LEFT_%d_TM" % i ])
-            res[ left_id ][ 'GC_PERCENT' ]  = float(primer3_dict[ "PRIMER_LEFT_%d_GC_PERCENT" % i ])
-            res[ left_id ][ 'CHR' ] = []
-            res[ left_id ][ 'POS' ] = []
-
-            right_id = "RIGHT_%d" % i
-            res[ right_id ] = {}
-            res[ right_id ][ 'SEQ' ] = primer3_dict[ primer_right_id ]
-            res[ right_id ][ 'TM' ]  = float(primer3_dict[ "PRIMER_RIGHT_%d_TM" % i ])
-            res[ right_id ][ 'GC_PERCENT' ]  = float(primer3_dict[ "PRIMER_RIGHT_%d_GC_PERCENT" % i ])
-            res[ right_id ][ 'CHR' ] = []
-            res[ right_id ][ 'POS' ] = []
-
-
-        primerfasta.close()
-
-    smalt_results = region_id + ".smalt"
-    core.add_new_tmp_file( smalt_results )
-
-    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results + " 2> /dev/null"
-
-    core.verbose_print( cmd, 4)
-    subprocess.call(cmd, shell=True)
-
-
-#    pp.pprint( res )
-
-    match = {}
-    smalt_report = []
-    query_region = []
-
-
-    with open(smalt_results, 'rU') as smalt_output:
-
-        for line in smalt_output:
-    
-            if (line.startswith("@")):
-               continue
-       
-            line = line.rstrip("\n")
-            fields = line.split("\t")
-
-            match_id        = fields[ 0 ] 
-            match_id        = re.sub(r'PRIMER_', '', match_id)
-            match_id        = re.sub(r'_SEQUENCE', '', match_id)
-
-            match_chrom     = fields[ 2 ]
-            match_pos       = int(fields[ 3 ])
-            match_flag      = fields[ 1 ]
-            
-            match_seq       = res[ match_id ][ 'SEQ' ]
-            match_length    = len( match_seq )
-            match_bp_agree = int(re.sub("AS:i:", '', fields[  12 ]))
-
-            if (match_length <= match_bp_agree + ALLOWED_MISMATCHES):
-                res[ match_id ][ 'CHR' ].append( match_chrom )
-                res[ match_id ][ 'POS' ].append( match_pos )
-
-
-            if ( target_chrom == match_chrom and 
-                 target_start < match_pos and
-                 target_end  > match_pos ):
-                res[ match_id ][ 'TARGET_POS'   ] = match_pos
-                res[ match_id ][ 'TARGET_CHROM' ] = match_chrom
-
-
-
-    # See if the primers map uniquely or not.
-    # If a primer does not map to the region of interest (low complexity etc) remove it.                
-    for primer  in  res.keys() :
-
-        if 'TARGET_CHROM' not in res[ primer ]:
-            del res[ primer ]
-            continue
-
-        res[ primer ]['MAPPING_SUMMARY'] = 'unique mapping'
-
-        nr_of_chromosomes = len(set(res[ primer ][ 'CHR' ]))
-        nr_of_mappings    = len( res[ primer ][ 'POS' ])
-
-        if (nr_of_mappings > 1 and nr_of_mappings <= MAX_MAPPINGS ):
-            res[ primer ]['MAPPING_SUMMARY'] = '%d mappings' % nr_of_mappings
-            res[ primer ][ 'MAPPING_SUMMARY' ] += " to chromosome: " + ",".join(set(res[ primer ][ 'CHR' ]))
-
-
-        elif (nr_of_mappings >= MAX_MAPPINGS ):
-            res[ primer ][ 'MAPPING_SUMMARY' ] = '%d mappings' % nr_of_mappings
-            res[ primer ][ 'MAPPING_SUMMARY' ] += " on %d chromosomes" % nr_of_chromosomes
-
-    return res
 
 
 
@@ -445,35 +300,6 @@ def make_mapped_primer_strings( target_sequence, primer_dict):
     return mapped_strings, mapped_colours
 
 
-def pretty_print_mappings( target_sequence, tagged_string, primer_strings, base1):
-    """
-    makes a pretty text output of target region and primers.
-    
-    input: target snp/target string, mapped primers, position of first base of the reference region
-    
-    output: string with nicely formatted data
-    
-    """
-
-    lines = []
-    
-    for i in range(0, len(target_sequence), 80):
-
-
-        lines.append("%-9d  %s" % ( base1+ i, target_sequence[i: i+80]))
-        lines.append("           " + tagged_string[i: i+80])
-
-        for primer_string in ( primer_strings ):
-
-            line =  "           " + primer_string[i: i+80]
-            if ( re.match(r'^ *$', line)):
-                continue
-            lines.append( line )
-
-        lines.append( "" )
-
-    return lines
-
 
 def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
     """
@@ -558,144 +384,6 @@ def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
 # output: string with nicely formatted data
 #
 
-#
-# makes a pretty text output of primer informatino
-#
-# input: 
-#        pdf canvas
-#        offset (where to start writing) 
-#        target start
-#        target end
-#        primers
-#        best fwd primer
-#        best rev primer
-#
-# output: string with nicely formatted data
-#
-def pretty_print_primer_data(primer_dict, target_chrom, target_start, target_end ):
-
-    lines = []
-
-
-    core.verbose_print( "extract_passed_primer_seqs", 3)
-
-    lines.append( "\n" )
-    lines.append( "\n" )
-    lines.append( "\n" )
-
-
-    lines.append( "_-=-"*15 +"_" )
-
-
-    if ( target_start == target_end ):
-        lines.append( " Primer design report for chr: %s position: %d" % (target_chrom, target_start))
-    else:
-        lines.append( " Primer design report for chr: %s range: %d-%d" % (target_chrom, target_start, target_end))
-
-    lines.append( "_-=-"*15 +"_")
-    lines.append( "\n")
-
-#    lines.append( "\t".join(['ID', '%GC', 'TM', 'Sequence']))
-    lines.append( "ID         POS             %GC    TM     Primer sequence      Best primer     Mapping(s)    ")
-    lines.append( "_-=-"*15 +"_")
-
-    primer_seqs = []
-    for primer in sorted(primer_dict):
-        if ( primer == 'FULLSEQ'):
-            continue
-
-        name = primer
-        name = re.sub(r'PRIMER_', '', name)
-        name = re.sub(r'_SEQUENCE', '', name)
-
-        lines.append( "%-10s %-14s  %.2f  %.2f  %-25s %s" % (name,
-                                                            "%s:%d" % (primer_dict[ name ][ "TARGET_CHROM"], primer_dict[ name ][ "TARGET_POS"]),
-                                                            primer_dict[ name ][ "GC_PERCENT"], 
-                                                            primer_dict[ name ][ "TM"],
-                                                            primer_dict[ name ][  "SEQ"], 
-                                                            primer_dict[ name ][ 'MAPPING_SUMMARY' ]))
-
-
-    lines.append( "" )
-    lines.append( "-="*46 )
-    lines.append( "" )
-
-    return lines
-
-
-
-def pretty_primer_data(outfile, target_chrom, target_start, target_end,  primer_dict, fwd_primer=None, rev_primer=None  ):
-    core.verbose_print("pretty_primer_data", 2)
-
-    fh = None
-
-    if outfile:
-        fh = open( outfile, 'w')
-
-
-    lines = []
-
-    if ( target_start == target_end ):
-        lines.append("Primer design report for chr: %s position: %d" % (target_chrom, target_start))
-    else:
-        lines.append("Primer design report for chr: %s range: %d-%d" % (target_chrom, target_start, target_end ))
-
-    lines.append("ID\tPosition\t%GC\tTM\tPrimer sequence\tBest primer\tMapping(s)")
-
-#    pp.pprint( passed_primers )
-
-    for primer in sorted( primer_dict ):
-        if ( primer == 'FULLSEQ'):
-            continue
-
-        name = primer
-        name = re.sub(r'PRIMER_', '', name)
-        name = re.sub(r'_SEQUENCE', '', name)
-
-        
-        picked_primer = ''
-
-        if ( fwd_primer == primer or rev_primer == primer):
-            picked_primer = 'Y'
-
-        lines.append("\t".join([name, 
-                              "%s:%d" % (primer_dict[ name ][ "TARGET_CHROM"], primer_dict[ name ][ "TARGET_POS"]),
-                              "%.2f" % primer_dict[ name ][ "GC_PERCENT"], 
-                              "%.2f" % primer_dict[ name ][ "TM"],
-                              primer_dict[ name ][ "SEQ"], picked_primer,
-                              primer_dict[ name ][ 'MAPPING_SUMMARY' ]]))
-
-
-
-
-        # lines.append("\t".join([name, 
-        #                       primer3_results[ "PRIMER_" + name + "_GC_PERCENT"], 
-        #                       primer3_results[ "PRIMER_" + name + "_TM"],
-        #                       primer3_results[ "PRIMER_" + name + "_SEQUENCE"], picked_primer,
-        #                       passed_primers[ "PRIMER_" + name + "_SEQUENCE" ][ 'MAPPING_SUMMARY' ]]))
-
-
-
-
-    lines.append("\n")
-    if ( fh ):
-        fh.write("\n".join( lines ))
-        fh.close()
-    else:
-        print "\n".join( lines )
-
-
-
-def method_blurb():
-
-    lines = []
-
-    lines.append('primer-designer version: ' + VERSION + ' using dbSNP 144 for SNP checking, and human reference GRCh37.')
-
-    lines.append('Common SNP annotation: A common SNP is one that has at least one 1000Genomes population with a minor ')
-    lines.append('allele of frequency >= 1% and for which 2 or more founders contribute to that minor allele frequency.')
-
-    return lines
 
 
 

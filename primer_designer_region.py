@@ -24,8 +24,11 @@ width, height = A4 #keep for later
 
 import primer_design_module as pd
 import primer_design.core
+import primer_design.config
 import primer_design.primer3
 import primer_design.blast
+import primer_design.printing
+import primer_design.format
 
 
 
@@ -221,7 +224,7 @@ def pretty_pdf_primer_data(c, y_offset, target_chrom, target_start, target_end, 
 def pretty_pdf_method(c, top_offset):
     primer_design.core.verbose_print("pretty_pdf_method", 3)
 
-    lines = pd.method_blurb()
+    lines = primer_design.format.method_blurb()
 
     top_offset = 80
 
@@ -264,8 +267,8 @@ def get_and_parse_arguments():
         args.target_end   = int( args.pos )
 
     # how many bp on either side are to be used for designing primers in
-    args.target_flank = args.flank or pd.FLANK
-    args.target_flank = int( pd.FLANK )
+    args.target_flank = args.flank or primer_design.config.FLANK
+    args.target_flank = int( primer_design.config.FLANK )
     
     if ( args.target_start == args.target_end):
         args.target_id = "%s:%d" % ( args.chrom, args.target_start)
@@ -310,7 +313,7 @@ def main():
 
     ( exon_chrom, exon_start, exon_end) = pd.map_target_region_to_exon( target_chrom, target_start, target_end)
 
-    if ( exon_start is not None and  exon_end is not None  and exon_end - exon_start + 1 < pd.MAX_PRODUCT):
+    if ( exon_start is not None and  exon_end is not None  and exon_end - exon_start + 1 < primer_design.config.MAX_PRODUCT):
         primer_design.core.verbose_print("Changing region to an exonic region (%s:%d-%d)" % (exon_chrom, exon_start, exon_end), 1)
         target_start = exon_start
         target_end   = exon_end
@@ -336,11 +339,14 @@ def main():
 
 
     if (  args.website_output ):
-        pd.pretty_primer_data(None, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
+
+        lines = primer_design.format.tabbed_primer_data(target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
+
+        primer_design.core.print_to_file_or_stdout( lines )
 
     elif (  args.text_output ):
         lines  = pd.pretty_print_primer_data( primer_dict, target_chrom, target_start, target_end )
-        lines += pd.pretty_print_mappings( target_sequence, tagged_region, mapped_primer_strings, target_start - pd.FLANK)
+        lines += pd.pretty_print_mappings( target_sequence, tagged_region, mapped_primer_strings, target_start - primer_design.config.FLANK)
         pd.pretty_primer_data("%s.txt" % target_filename, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
         print "\n".join(lines)
         exit()
@@ -357,7 +363,7 @@ def main():
         top_offset = pretty_pdf_primer_data(c, height - 30, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
             
         c.setFont('mono', 8)
-        pretty_pdf_mappings(c, top_offset,  target_sequence, tagged_region, mapped_primer_strings, mapped_primer_colours, target_start - pd.FLANK)
+        pretty_pdf_mappings(c, top_offset,  target_sequence, tagged_region, mapped_primer_strings, mapped_primer_colours, target_start - primer_design.config.FLANK)
 
         pretty_pdf_method(c, top_offset)
 

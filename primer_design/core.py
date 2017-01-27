@@ -26,6 +26,20 @@ if ( __name__ == '__main__'):
 
 
 
+def print_to_file_or_stdout( lines, outfile=None):
+
+    
+    if outfile:
+        fh = open( outfile, 'w')
+        fh.write("\n".join( lines ))
+        fh.close()
+
+    else:
+        print "\n".join( lines )
+
+
+
+
 def delete_tmp_files():
     for tmp_filename in tmp_files:
         verbose_print( "deleting tmp file: %s " % tmp_filename, 2)
