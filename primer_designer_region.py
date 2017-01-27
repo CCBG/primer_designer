@@ -24,6 +24,8 @@ width, height = A4 #keep for later
 
 import primer_design_module as pd
 import primer_design.core
+import primer_design.primer3
+import primer_design.blast
 
 
 
@@ -316,12 +318,12 @@ def main():
 #    exit()
 
 
-    target_sequence                   =   pd.fetch_region( target_chrom, target_start - target_flank, target_end + target_flank     )
+    target_sequence                   =   primer_design.core.fetch_region( target_chrom, target_start - target_flank, target_end + target_flank     )
     (tagged_sequence, tagged_region)  =   pd.markup_sequence(target_sequence, target_chrom, target_start, target_end, target_flank )
 
-    primer3_results  = pd.run_primer3( target_id , tagged_sequence, "%s_%d.primer3" % ( target_chrom, target_start))
+    primer3_results  = primer_design.primer3.run( target_id , tagged_sequence, "%s_%d.primer3" % ( target_chrom, target_start))
 #    primer_dict   = map_primers_smalt( target_id, primer3_results, target_chrom, target_start - target_flank, target_end+ target_flank)
-    primer_dict   = pd.map_primers_blast( target_id, primer3_results, target_chrom, target_start - target_flank, target_end+ target_flank)
+    primer_dict   = primer_design.blast.map_primers( target_id, primer3_results, target_chrom, target_start - target_flank, target_end+ target_flank)
 #    pp.pprint( primer_dict )
     
 

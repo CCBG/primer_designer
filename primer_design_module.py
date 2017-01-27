@@ -16,6 +16,8 @@ import shlex
 import subprocess
 
 
+import primer_design.core as core
+
 sys.path.append("/software/lib/python2.7/site-packages/pysam-0.7.5-py2.7-linux-x86_64.egg")
 import pysam
 
@@ -29,13 +31,8 @@ colours = [[255,   0,   0], # red
            [100, 255, 100]] # Yellow, crap!
 
 # External tools we use 
-SAMTOOLS   = '/software/bin/samtools ';
-REFERENCE  = '/refs/human_1kg/human_g1k_v37.fasta '
-TABIX      = '/software/bin/tabix '
 SMALT      = '/software/bin/smalt-0.7.6 '
 PRIMER3    = '/software/bin/primer3_core '
-BLASTN     = '/software/packages/ncbi-blast-2.5.0+/bin/blastn'
-BLAST_DB   = '/refs/human_1kg/human_g1k_v37.fasta'
 
 
 
@@ -55,63 +52,6 @@ import primer_design.core
 
 
 
-def fetch_region( chrom, start, end ):
-    """
-    Extracts a DNA region from the reference genome
-    
-    input: chromosome (string)
-           start position ( int ) 
-           end position ( int )
-
-    output: sequence on one line.
-
-    Kim Brugger (25 Jan 2017)
-    """
-
-    primer_design.core.verbose_print( "fetch_region", 2)
-
-    cmd = "%s faidx %s  %s:%d-%d " % ( SAMTOOLS, REFERENCE, chrom, start, end )
-    args = shlex.split( cmd )
-    p = subprocess.Popen(args, stdout=subprocess.PIPE)
-
-    output = p.communicate()
-    sequence = ""
-    for line in ( output[0].split("\n")):
-        if ( re.match('>', line)):
-            continue 
-
-        sequence += line
-    return sequence 
-
-def fetch_known_SNPs( tabix_file, chrom, start, end):
-    """
-    Extracts known SNPs from a dbsnp file
-
-    input: location to dbSNP vcf file, 
-           chromosom, 
-           start pos, 
-           end pos 
-    
-    output: list of list of variants.
-    
-    Kim Brugger (17 Aug 2016)
-    """
-    primer_design.core.verbose_print( "fetch_known_SNPs", 2)
-
-    cmd = "%s %s  %s:%d-%d " % ( TABIX, tabix_file, chrom, start, end )
-
-    primer_design.core.verbose_print( cmd, 3)
-
-    args = shlex.split( cmd )
-    p = subprocess.Popen(args, stdout=subprocess.PIPE)
-
-    output = p.communicate()
-    vars = []
-
-    for line in ( output[0].split("\n")):
-        vars.append( line.split("\t"));
-
-    return vars 
 
 
 
@@ -129,7 +69,7 @@ def markup_sequence( target_sequence, target_chrom, target_start, target_end, ta
     """
 
 
-    primer_design.core.verbose_print( "tag_sequence", 2)
+    core.verbose_print( "tag_sequence", 2)
 
     sequence = list(target_sequence)
     tags = [" "] * len( target_sequence )
@@ -146,7 +86,7 @@ def markup_sequence( target_sequence, target_chrom, target_start, target_end, ta
     #return tags
         
 
-    primer_design.core.verbose_print( "::::: %d - %d, %d" % (target_start, target_end, target_flank), 5)
+    core.verbose_print( "::::: %d - %d, %d" % (target_start, target_end, target_flank), 5)
     # Tag the target sequence, regardless of the nature of the variant only one (1) base is tagged as the target.
     sequence[ target_flank - TARGET_LEAD ] = ' [' + target_sequence [ target_flank - TARGET_LEAD ]
     sequence[(- target_flank + TARGET_LEAD) -1 ] = sequence [ (- target_flank + TARGET_LEAD) -1 ] + '] '
@@ -158,9 +98,9 @@ def markup_sequence( target_sequence, target_chrom, target_start, target_end, ta
 #                               target_chrom, target_start - target_flank, target_end + target_flank )
 
 
-    dbSNPs = fetch_known_SNPs( '/refs/human_1kg/annots-rsIDs-dbSNPv144.20150605.tab.gz', target_chrom, 
-                                                                                         target_start - target_flank, 
-                                                                                         target_end + target_flank )
+    dbSNPs = core.fetch_known_SNPs( '/refs/human_1kg/annots-rsIDs-dbSNPv144.20150605.tab.gz', target_chrom, 
+                                                  target_start - target_flank, 
+                                                  target_end + target_flank )
 
     masked_positions = []
 
@@ -251,222 +191,6 @@ def map_target_region_to_exon(chrom, target_start, target_end):
     return ( chrom, coding_start, coding_end )
 
 
-def write_primer3_file(seq_id, seq, primer3_file = ""):
-    """
-    Generate the file required to run primer3
-    
-    input: sequence-id, sequence, output-file (optional)
-    
-    output: None
-    
-    Kim Brugger (17 Aug 2016)
-    """
-
-    primer_design.core.verbose_print( "write_primer3_file", 2)
-
-    upstream_end      = 1
-    downstream_start =  2
-    for i in range(0, len(seq)):
-            if seq[ i ] == '[':
-                upstream_end = i
-            elif seq[ i ] == ']':
-                downstream_start = i
-
-
-    template = '''SEQUENCE_ID={seq_id}
-SEQUENCE_TEMPLATE={seq}
-SEQUENCE_TARGET={flank},{len}
-PRIMER_FIRST_BASE_INDEX=1
-PRIMER_TASK=generic
-PRIMER_MIN_THREE_PRIME_DISTANCE=3
-PRIMER_EXPLAIN_FLAG=1
-PRIMER_MAX_LIBRARY_MISPRIMING=12.00
-PRIMER_PAIR_MAX_LIBRARY_MISPRIMING=20.00
-PRIMER_PRODUCT_SIZE_RANGE=200-800
-PRIMER_NUM_RETURN=5
-PRIMER_MAX_END_STABILITY=9.0
-PRIMER_MAX_SELF_ANY_TH=45.00
-PRIMER_MAX_SELF_END_TH=35.00
-PRIMER_PAIR_MAX_COMPL_ANY_TH=45.00
-PRIMER_PAIR_MAX_COMPL_END_TH=35.00
-PRIMER_MAX_HAIRPIN_TH=24.00
-PRIMER_MAX_TEMPLATE_MISPRIMING_TH=40.00
-PRIMER_PAIR_MAX_TEMPLATE_MISPRIMING_TH=70.00
-PRIMER_MIN_SIZE=18
-PRIMER_OPT_SIZE=20
-PRIMER_MAX_SIZE=22
-PRIMER_MIN_TM=58.0
-PRIMER_OPT_TM=60.0
-PRIMER_MAX_TM=62.0
-PRIMER_PAIR_MAX_DIFF_TM=5.0
-PRIMER_TM_FORMULA=1
-PRIMER_SALT_MONOVALENT=50.0
-PRIMER_SALT_CORRECTIONS=1
-PRIMER_SALT_DIVALENT=1.5
-PRIMER_DNTP_CONC=0.6
-PRIMER_DNA_CONC=50.0
-PRIMER_THERMODYNAMIC_OLIGO_ALIGNMENT=1
-PRIMER_THERMODYNAMIC_TEMPLATE_ALIGNMENT=0
-PRIMER_LOWERCASE_MASKING=0
-PRIMER_MIN_GC=30.0
-PRIMER_MAX_GC=70.0
-PRIMER_MAX_NS_ACCEPTED=0
-PRIMER_MAX_POLY_X=4
-PRIMER_OUTSIDE_PENALTY=0
-PRIMER_GC_CLAMP=0
-PRIMER_LIBERAL_BASE=1
-PRIMER_LIB_AMBIGUITY_CODES_CONSENSUS=0
-PRIMER_PICK_ANYWAY=1
-PRIMER_WT_TM_LT=1.0
-PRIMER_WT_TM_GT=1.0
-PRIMER_WT_SIZE_LT=1.0
-PRIMER_WT_SIZE_GT=1.0
-PRIMER_WT_GC_PERCENT_LT=0.0
-PRIMER_WT_GC_PERCENT_GT=0.0
-PRIMER_WT_SELF_ANY_TH=0.0
-PRIMER_WT_SELF_END_TH=0.0
-PRIMER_WT_HAIRPIN_TH=0.0
-PRIMER_WT_NUM_NS=0.0
-PRIMER_WT_LIBRARY_MISPRIMING=0.0
-PRIMER_WT_SEQ_QUAL=0.0
-PRIMER_WT_END_QUAL=0.0
-PRIMER_WT_POS_PENALTY=0.0
-PRIMER_WT_END_STABILITY=0.0
-PRIMER_WT_TEMPLATE_MISPRIMING_TH=0.0
-PRIMER_PAIR_WT_PRODUCT_SIZE_LT=0.0
-PRIMER_PAIR_WT_PRODUCT_SIZE_GT=0.0
-PRIMER_PAIR_WT_PRODUCT_TM_LT=0.0
-PRIMER_PAIR_WT_PRODUCT_TM_GT=0.0
-PRIMER_PAIR_WT_DIFF_TM=0.0
-PRIMER_PAIR_WT_COMPL_ANY_TH=0.0
-PRIMER_PAIR_WT_COMPL_END_TH=0.0
-PRIMER_PAIR_WT_LIBRARY_MISPRIMING=0.0
-PRIMER_PAIR_WT_PR_PENALTY=1.0
-PRIMER_PAIR_WT_IO_PENALTY=0.0
-PRIMER_PAIR_WT_TEMPLATE_MISPRIMING=0.0
-PRIMER_INTERNAL_WT_SIZE_LT=1.0
-PRIMER_INTERNAL_WT_END_QUAL=0.0
-PRIMER_INTERNAL_MAX_SELF_END=12.00
-PRIMER_QUALITY_RANGE_MIN=0
-PRIMER_PAIR_MAX_COMPL_END=3.00
-PRIMER_PRODUCT_MAX_TM=1000000.0
-PRIMER_INTERNAL_MAX_SIZE=27
-PRIMER_INTERNAL_WT_SELF_ANY=0.0
-PRIMER_INTERNAL_MAX_POLY_X=5
-PRIMER_INTERNAL_WT_SIZE_GT=1.0
-PRIMER_SEQUENCING_ACCURACY=20
-PRIMER_INTERNAL_WT_TM_GT=1.0
-PRIMER_INTERNAL_WT_LIBRARY_MISHYB=0.0
-PRIMER_INTERNAL_MAX_GC=80.0
-PRIMER_PAIR_WT_COMPL_ANY=0.0
-PRIMER_PICK_INTERNAL_OLIGO=0
-PRIMER_MAX_SELF_END=3.00
-PRIMER_QUALITY_RANGE_MAX=100
-PRIMER_INTERNAL_DNTP_CONC=0.0
-PRIMER_INTERNAL_MIN_SIZE=18
-PRIMER_INTERNAL_MIN_QUALITY=0
-PRIMER_SEQUENCING_INTERVAL=250
-PRIMER_INTERNAL_SALT_DIVALENT=1.5
-PRIMER_MAX_SELF_ANY=8.00
-PRIMER_INTERNAL_WT_SEQ_QUAL=0.0
-PRIMER_PAIR_WT_COMPL_END=0.0
-PRIMER_INTERNAL_OPT_TM=60.0
-PRIMER_SEQUENCING_SPACING=500
-PRIMER_INTERNAL_MAX_SELF_ANY=12.00
-PRIMER_MIN_END_QUALITY=0
-PRIMER_INTERNAL_MIN_TM=57.0
-PRIMER_PAIR_MAX_COMPL_ANY=8.00
-PRIMER_SEQUENCING_LEAD=50
-PRIMER_PICK_LEFT_PRIMER=1
-PRIMER_INTERNAL_OPT_SIZE=20
-PRIMER_WT_TEMPLATE_MISPRIMING=0.0
-PRIMER_MAX_END_GC=5
-PRIMER_MIN_QUALITY=0
-PRIMER_INTERNAL_MAX_LIBRARY_MISHYB=12.00
-PRIMER_INTERNAL_WT_GC_PERCENT_GT=0.0
-PRIMER_INTERNAL_MAX_NS_ACCEPTED=0
-PRIMER_WT_SELF_ANY=0.0
-PRIMER_MAX_TEMPLATE_MISPRIMING=12.00
-PRIMER_INTERNAL_WT_NUM_NS=0.0
-PRIMER_INTERNAL_WT_SELF_END=0.0
-PRIMER_PRODUCT_OPT_SIZE=0
-PRIMER_PRODUCT_OPT_TM=0.0
-PRIMER_PAIR_MAX_TEMPLATE_MISPRIMING=24.00
-PRIMER_INSIDE_PENALTY=-1.0
-PRIMER_INTERNAL_MIN_GC=20.0
-PRIMER_PRODUCT_MIN_TM=-1000000.0
-PRIMER_INTERNAL_SALT_MONOVALENT=50.0
-PRIMER_WT_SELF_END=0.0
-PRIMER_INTERNAL_DNA_CONC=50.0
-PRIMER_PICK_RIGHT_PRIMER=1
-PRIMER_INTERNAL_MAX_TM=63.0
-PRIMER_INTERNAL_WT_GC_PERCENT_LT=0.0
-PRIMER_INTERNAL_WT_TM_LT=1.0
-PRIMER_THERMODYNAMIC_PARAMETERS_PATH=/software/bin/primer3_config/
-='''
-
-    details = {
-        "seq_id" : seq_id,
-        "seq"    : seq,
-        "flank"  : upstream_end,
-        "len"    : downstream_start - upstream_end + 1
-    }
-
- 
-    with open( primer3_file, 'w+') as outfile:
-        outfile.write(template.format(**details))
-
-    outfile.close()
-
-
-def run_primer3( seq_id, seq, primer3_file = ""):
-    """
-    runs primer3 and returns the output as a dict
-    
-    input: sequence ID, sequence, primer3_file (optional)
-    output: returns a dict with the results.
-    
-    Kim Brugger (17 Aug 2016)
-    """
-
-    primer_design.core.verbose_print( "run_primer3", 2)
-
-    if ( primer3_file == "" ):
-        primer3_file = seq_id + ".primer3"
-
-
-    primer3_file = re.sub(":", "_", primer3_file)
-
-
-    primer_design.core.add_new_tmp_file( primer3_file )
-
-    write_primer3_file(seq_id, seq, primer3_file)
-
-
-    cmd = PRIMER3 + " < " + primer3_file
-
-
-    primer_design.core.verbose_print( cmd, 3)
-    args = shlex.split( cmd )
-    process = subprocess.Popen(cmd,
-                               stdout=subprocess.PIPE,
-                               shell=True)
-  
-    output = process.communicate()
-    output_dict = dict()
-  
-    for line in output[0].split("\n"):
-
-        if (line == '='):
-            break
-
-        key, value = line.split("=")
-
-        output_dict[ key ] = value
-
-    return output_dict
-
-
 
 def map_primers_smalt( region_id, primer3_dict, target_chrom, target_start, target_end):
     """
@@ -480,13 +204,13 @@ def map_primers_smalt( region_id, primer3_dict, target_chrom, target_start, targ
     Kim Brugger (17 Aug 2016)
     """    
 
-    primer_design.core.verbose_print( "check_primers", 2)
+    core.verbose_print( "check_primers", 2)
 
     res = dict()
 
     primers_file = region_id + "_p3seq.fasta"
 
-    primer_design.core.add_new_tmp_file( primers_file )
+    core.add_new_tmp_file( primers_file )
 
     with open( primers_file, 'w+') as primerfasta:
 
@@ -522,11 +246,11 @@ def map_primers_smalt( region_id, primer3_dict, target_chrom, target_start, targ
         primerfasta.close()
 
     smalt_results = region_id + ".smalt"
-    primer_design.core.add_new_tmp_file( smalt_results )
+    core.add_new_tmp_file( smalt_results )
 
     cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results + " 2> /dev/null"
 
-    primer_design.core.verbose_print( cmd, 4)
+    core.verbose_print( cmd, 4)
     subprocess.call(cmd, shell=True)
 
 
@@ -597,172 +321,6 @@ def map_primers_smalt( region_id, primer3_dict, target_chrom, target_start, targ
     return res
 
 
-def map_primers_blast( region_id, primer3_dict, target_chrom, target_start, target_end):
-    """
-    Maps primers to the reference using smalt to check where they map.
-    
-    input: region-ID, primer3_dict
-    
-    output: dict of primers and their nr of mappings to the genome
-
-    Kim Brugger (17 Aug 2016)
-
-    """
-    primer_design.core.verbose_print( "check_primers", 2)
-
-    res = dict()
-
-    primers_file = region_id + "_p3seq.fasta"
-
-    primer_design.core.add_new_tmp_file( primers_file )
-
-    with open( primers_file, 'w+') as primerfasta:
-
-        for i in range(0, 5):
-
-            primer_left_id = "PRIMER_LEFT_%d_SEQUENCE" % i
-            primer_right_id = "PRIMER_RIGHT_%d_SEQUENCE" % i
-
-            if ( primer_right_id not in primer3_dict or primer_left_id not in primer3_dict):
-                continue
-
-            primerfasta.write(">%s\n%s\n" % (primer_left_id, primer3_dict[ primer_left_id ]))
-            primerfasta.write(">%s\n%s\n" % (primer_right_id, primer3_dict[ primer_right_id ]))
-
-            # Store the primer seqs in the res dict as we will needthem later in the program
-            left_id = "LEFT_%d" % i
-            res[ left_id ] = {}
-            res[ left_id ][ 'SEQ' ] = primer3_dict[ primer_left_id ]
-            res[ left_id ][ 'TM' ]  = float(primer3_dict[ "PRIMER_LEFT_%d_TM" % i ])
-            res[ left_id ][ 'GC_PERCENT' ]  = float(primer3_dict[ "PRIMER_LEFT_%d_GC_PERCENT" % i ])
-            res[ left_id ][ 'CHR' ] = []
-            res[ left_id ][ 'POS' ] = []
-            res[ left_id ][ 'STRAND' ] = []
-
-            right_id = "RIGHT_%d" % i
-            res[ right_id ] = {}
-            res[ right_id ][ 'SEQ' ] = primer3_dict[ primer_right_id ]
-            res[ right_id ][ 'TM' ]  = float(primer3_dict[ "PRIMER_RIGHT_%d_TM" % i ])
-            res[ right_id ][ 'GC_PERCENT' ]  = float(primer3_dict[ "PRIMER_RIGHT_%d_GC_PERCENT" % i ])
-            res[ right_id ][ 'CHR' ] = []
-            res[ right_id ][ 'POS' ] = []
-            res[ right_id ][ 'STRAND' ] = []
-
-
-        primerfasta.close()
-
-    blastn_results = region_id + ".blastn"
-#    pp.pprint( res )
-    primer_design.core.add_new_tmp_file( blastn_results )
-
-#    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results + " 2> /dev/null"
-
-    cmd = "{blastn} -db {blast_db} -word_size 7 -outfmt 7 -query {query} -out {outfile}".format(blastn   = BLASTN, 
-                                                                                                blast_db = BLAST_DB, 
-                                                                                                query    = primers_file,
-                                                                                                outfile  = blastn_results)
-
-    primer_design.core.verbose_print( cmd, 4)
-    subprocess.call(cmd, shell=True)
-
-
-#    pp.pprint( res )
-
-    match = {}
-    smalt_report = []
-    query_region = []
-
-
-    with open(blastn_results, 'rU') as blastn_output:
-
-        for line in blastn_output:
-        
-            if (line.startswith("#")):
-                continue
-
-#        print line
-        
-            line = line.rstrip("\n")
-            fields = line.split("\t")
-        
-            match_id        = fields[ 0 ] 
-            match_id        = re.sub(r'PRIMER_', '', match_id)
-            match_id        = re.sub(r'_SEQUENCE', '', match_id)
-        
-            match_chrom     = fields[ 1 ]
-            match_pos       = int(fields[ 8 ])
-        
-            seq             = res[ match_id ][ 'SEQ' ]
-            seq_length      = len( seq )
-            match_length    = int( fields[ 3 ])
-            align_end       = int( fields[ 7 ])
-            
-            match_disagree  = int( fields[ 4 ])
-            match_gaps      = int( fields[ 5 ])
-            match_bp_agree  = seq_length - ( seq_length - match_length) - match_disagree 
-
-            match_strand    = "plus"
-            if ( int( fields[ 8 ] ) > int( fields[ 9 ])):
-                match_strand    = "minus"
-                match_pos       = int(fields[ 9 ])
-
-
-            # Check that the 3' end of the primer looks good
-            if ( seq_length > align_end + MAX_3_PRIME_MISMATCH ):
-                continue
-
-
-            if ( match_gaps ):
-                continue 
-
-
-#        print " %d -- %d " % ( seq_length, match_bp_agree )
-
-
-            if (seq_length <= match_bp_agree + ALLOWED_MISMATCHES):
-                res[ match_id ][ 'CHR' ].append( match_chrom )
-                res[ match_id ][ 'POS' ].append( match_pos )
-                res[ match_id ][ 'STRAND'].append( match_strand )
-
-
-
-            if ( target_chrom == match_chrom and 
-                 target_start < match_pos and
-                 target_end  > match_pos ):
-                res[ match_id ][ 'TARGET_POS'   ] = match_pos
-                res[ match_id ][ 'TARGET_CHROM' ] = match_chrom
-            
-
-#    pp.pprint( res )
-
-    # See if the primers map uniquely or not.
-    # If a primer does not map to the region of interest (low complexity etc) remove it.                
-    for primer  in  res.keys() :
-
-        if 'TARGET_CHROM' not in res[ primer ]:
-            del res[ primer ]
-            continue
-    
-        res[ primer ]['MAPPING_SUMMARY'] = 'unique mapping'
-    
-        nr_of_chromosomes = len(set(res[ primer ][ 'CHR' ]))
-        nr_of_mappings    = len( res[ primer ][ 'POS' ])
-    
-        if (nr_of_mappings > 1 and nr_of_mappings <= MAX_MAPPINGS ):
-            res[ primer ]['MAPPING_SUMMARY'] = '%d mappings' % nr_of_mappings
-            res[ primer ][ 'MAPPING_SUMMARY' ] += " to chromosome: " + ",".join(set(res[ primer ][ 'CHR' ]))
-        
-        
-        elif (nr_of_mappings >= MAX_MAPPINGS ):
-            res[ primer ][ 'MAPPING_SUMMARY' ] = '%d mappings' % nr_of_mappings
-            res[ primer ][ 'MAPPING_SUMMARY' ] += " on %d chromosomes" % nr_of_chromosomes
-
-
-
-
-
-    return res
-
 
 
 
@@ -778,7 +336,7 @@ def check_if_primer_clash( mapped_list, start, end):
     Kim Brugger (18 Aug 2016)
     """
     
-    primer_design.core.verbose_print( "check_if_primers_clash", 4)
+    core.verbose_print( "check_if_primers_clash", 4)
     for i in range (start, end):
         if (mapped_list[ i ]  != " "):
             return True 
@@ -824,9 +382,9 @@ def make_mapped_primer_strings( target_sequence, primer_dict):
     # extract the primer sequences
     primer_seqs = get_primer_seqs( primer_dict )
     
-    primer_design.core.verbose_print( "primer_make_mapped_strings", 2)
+    core.verbose_print( "primer_make_mapped_strings", 2)
     # Align the primers to the target sequence to see where they align
-    mappings = primer_design.core.align_primers_to_seq(target_sequence, primer_seqs )
+    mappings = core.align_primers_to_seq(target_sequence, primer_seqs )
     
     # data struct for the align primer tagging, initiate with an list the length of the region we are looking at
     mapped_strings = []
@@ -849,7 +407,7 @@ def make_mapped_primer_strings( target_sequence, primer_dict):
         arrow_type = ">"
         # Flip the type if on the nagative strand
         if ( strand == 1 ):
-            primer = primer_design.core.revDNA( primer )
+            primer = core.revDNA( primer )
             arrow_type = "<"
 
         # make the tag
@@ -927,7 +485,7 @@ def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
 
     """
 
-    primer_design.core.verbose_print("pick_best_primers", 2)
+    core.verbose_print("pick_best_primers", 2)
 
     pp.pprint( primer_data )
 
@@ -944,11 +502,11 @@ def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
             continue
 
         if ( primer_data[ primer][ 'MAPPING_SUMMARY' ] != 'unique mapping'):
-            primer_design.core.verbose_print( "Non unique mapping ( %s )" % primer, 5)
+            core.verbose_print( "Non unique mapping ( %s )" % primer, 5)
             continue
 
         if ( not primer_data[ primer ][ 'CHR' ] or primer_data[ primer ][ 'CHR' ][ 0 ] != chromo ):
-            primer_design.core.verbose_print( "No mapping or Unique mapping to different chromosome (%s). Should never happen! " % primer, 5)
+            core.verbose_print( "No mapping or Unique mapping to different chromosome (%s). Should never happen! " % primer, 5)
             pp.pprint( primer_data[ primer ] )
             continue
 
@@ -957,7 +515,7 @@ def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
             primer_dist = start_pos - int (primer_data[ primer ][ 'POS' ][ 0 ]) + 1
 
             if ( primer_dist < 0 ):
-                primer_design.core.verbose_print("Primer %s downstream of region ! ( %d [%d, %d])" % (primer, primer_dist, start_pos, int (primer_data[ primer ][ 'POS' ][ 0 ])), 5)
+                core.verbose_print("Primer %s downstream of region ! ( %d [%d, %d])" % (primer, primer_dist, start_pos, int (primer_data[ primer ][ 'POS' ][ 0 ])), 5)
                 continue
 
             if ( dist_fwd is None or primer_dist < dist_fwd):
@@ -971,7 +529,7 @@ def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
             primer_dist =  int (primer_data[ primer ][ 'POS' ][ 0 ]) - end_pos + 1
 
             if ( primer_dist < 0 ):
-                primer_design.core.verbose_print( "Primer %s uptream of region ! (%d)" % (primer, primer_dist), 5)
+                core.verbose_print( "Primer %s uptream of region ! (%d)" % (primer, primer_dist), 5)
                 continue
 
             if ( dist_rev is None or primer_dist < dist_rev ):
@@ -1019,7 +577,7 @@ def pretty_print_primer_data(primer_dict, target_chrom, target_start, target_end
     lines = []
 
 
-    primer_design.core.verbose_print( "extract_passed_primer_seqs", 3)
+    core.verbose_print( "extract_passed_primer_seqs", 3)
 
     lines.append( "\n" )
     lines.append( "\n" )
@@ -1067,7 +625,7 @@ def pretty_print_primer_data(primer_dict, target_chrom, target_start, target_end
 
 
 def pretty_primer_data(outfile, target_chrom, target_start, target_end,  primer_dict, fwd_primer=None, rev_primer=None  ):
-    primer_design.core.verbose_print("pretty_primer_data", 2)
+    core.verbose_print("pretty_primer_data", 2)
 
     fh = None
 
