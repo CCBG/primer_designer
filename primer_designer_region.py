@@ -29,7 +29,18 @@ import primer_design.primer3
 import primer_design.blast
 import primer_design.printing
 import primer_design.format
+import primer_design.analysis
 
+
+# colours for the primer rendering:
+
+colours = [[255,   0,   0], # red
+           [  0, 255,   0], # green
+           [  0,   0, 255], # blue
+           [255,   0, 255], # Pink
+           [0,   255, 255],
+           [255, 255,   0], #Dark Green
+           [100, 255, 100]] # Yellow, crap!
 
 
 def pretty_pdf_mappings(c, top_offset,  target_sequence, tagged_string, primer_strings, primer_colours, base1):
@@ -109,9 +120,9 @@ def pretty_pdf_mappings(c, top_offset,  target_sequence, tagged_string, primer_s
 
                 if ( primer_colour[k] >= 0 ):
 
-                    c.setFillColorRGB(pd.colours[ primer_colour[k] ][0], 
-                                      pd.colours[ primer_colour[k] ][1],
-                                      pd.colours[ primer_colour[k] ][2])
+                    c.setFillColorRGB(colours[ primer_colour[k] ][0], 
+                                      colours[ primer_colour[k] ][1],
+                                      colours[ primer_colour[k] ][2])
 
                 c.drawString(x_offset , top_offset, primer_string[k])
                 x_offset += stringWidth(" ", 'mono', 8)
@@ -200,9 +211,9 @@ def pretty_pdf_primer_data(c, y_offset, target_chrom, target_start, target_end, 
 #        print pp.pprint(colours[ int( primer_nr ) ])
         
 
-        c.setFillColorRGB(pd.colours[ int( primer_nr ) ][0], 
-                          pd.colours[ int( primer_nr ) ][1],
-                          pd.colours[ int( primer_nr ) ][2])
+        c.setFillColorRGB(colours[ int( primer_nr ) ][0], 
+                          colours[ int( primer_nr ) ][1],
+                          colours[ int( primer_nr ) ][2])
 
         c.drawString(40 , y_offset, name)
         c.setFillColorRGB(0,0,0)
@@ -311,7 +322,7 @@ def main():
     target_id       = args.target_id
     target_filename = args.filename
 
-    ( exon_chrom, exon_start, exon_end) = pd.map_target_region_to_exon( target_chrom, target_start, target_end)
+    ( exon_chrom, exon_start, exon_end) = primer_design.core.map_target_region_to_exon( target_chrom, target_start, target_end)
 
     if ( exon_start is not None and  exon_end is not None  and exon_end - exon_start + 1 < primer_design.config.MAX_PRODUCT):
         primer_design.core.verbose_print("Changing region to an exonic region (%s:%d-%d)" % (exon_chrom, exon_start, exon_end), 1)
@@ -322,7 +333,7 @@ def main():
 
 
     target_sequence                   =   primer_design.core.fetch_region( target_chrom, target_start - target_flank, target_end + target_flank     )
-    (tagged_sequence, tagged_region)  =   pd.markup_sequence(target_sequence, target_chrom, target_start, target_end, target_flank )
+    (tagged_sequence, tagged_region)  =   primer_design.core.markup_sequence(target_sequence, target_chrom, target_start, target_end, target_flank )
 
     primer3_results  = primer_design.primer3.run( target_id , tagged_sequence, "%s_%d.primer3" % ( target_chrom, target_start))
 #    primer_dict   = map_primers_smalt( target_id, primer3_results, target_chrom, target_start - target_flank, target_end+ target_flank)
@@ -330,8 +341,8 @@ def main():
 #    pp.pprint( primer_dict )
     
 
-    best_fwd_primer, best_rev_primer = pd.pick_best_primers(primer_dict, target_chrom, target_start, target_end)
-    (mapped_primer_strings, mapped_primer_colours) = pd.make_mapped_primer_strings( target_sequence, primer_dict)
+    best_fwd_primer, best_rev_primer = primer_design.analysis.pick_best_primers(primer_dict, target_chrom, target_start, target_end)
+    (mapped_primer_strings, mapped_primer_colours) = primer_design.core.make_mapped_primer_strings( target_sequence, primer_dict)
 
 #    pp.pprint( mapped_primer_strings )
 #    pp.pprint( mapped_primer_colours )
@@ -345,9 +356,9 @@ def main():
         primer_design.core.print_to_file_or_stdout( lines )
 
     elif (  args.text_output ):
-        lines  = pd.pretty_print_primer_data( primer_dict, target_chrom, target_start, target_end )
-        lines += pd.pretty_print_mappings( target_sequence, tagged_region, mapped_primer_strings, target_start - primer_design.config.FLANK)
-        pd.pretty_primer_data("%s.txt" % target_filename, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
+        lines  = primer_design.format.pretty_primer_data( primer_dict, target_chrom, target_start, target_end )
+        lines += primer_design.format.pretty_mappings( target_sequence, tagged_region, mapped_primer_strings, target_start - primer_design.config.FLANK)
+        primer_design.format.pretty_primer_data("%s.txt" % target_filename, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
         print "\n".join(lines)
         exit()
 

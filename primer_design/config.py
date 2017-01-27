@@ -33,3 +33,5 @@ MAX_MAPPINGS         = 5   # Less or equal number of mappings to the reference w
 MAX_PRODUCT          = 1200
 MAX_3_PRIME_MISMATCH = 2
 
+
+
