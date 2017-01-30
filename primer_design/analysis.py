@@ -3,16 +3,15 @@
 Various functions to evaluate the mappings of primers to get the best primer-pair.
 
 """
+import re
 import pprint as pp
 
 import core
-
+import config
 
 if ( __name__ == '__main__'):
     sys.stderr.write( "This is a module and not meant to be run as a stand alone program\n" )
     exit( 1 )
-
-
 
 
 def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
@@ -26,9 +25,6 @@ def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
     """
 
     core.verbose_print("pick_best_primers", 2)
-
-    pp.pprint( primer_data )
-
 
 
     # First group the primers according to the region.
@@ -131,7 +127,6 @@ def digital_PCR( primer_mappings ):
                     chr1 = primer_mappings[ primer1 ][ 'CHR' ][ chr_index1 ]
                     chr2 = primer_mappings[ primer2 ][ 'CHR' ][ chr_index2 ]
 
-
                     pos1 = int( primer_mappings[ primer1 ][ 'POS' ][ chr_index1 ] )
                     pos2 = int( primer_mappings[ primer2 ][ 'POS' ][ chr_index2 ] )
 
@@ -147,14 +142,16 @@ def digital_PCR( primer_mappings ):
                         continue
 
 
+                    # Make sure that the strand is in the right orientation.
                     if ( pos1 < pos2 and strand1 != 'plus' and strand2 != 'minus'):
                         continue
                     elif( pos1 > pos2 and strand1 != 'minus' and strand2 != 'plus'):
                         continue
 
 
+                    # Calculate the product size, and check if it is in a doable range
                     product_size = ( pos2 - pos1 )
-                    if ( product_size < 0  or product_size > MAX_PRODUCT_SIZE):
+                    if ( product_size < 0  or product_size > config.MAX_PRODUCT_SIZE):
                         continue
 
 
@@ -164,35 +161,41 @@ def digital_PCR( primer_mappings ):
                     products[ primer1 ][ primer2 ].append( {'chr' : chr1, 'start_pos': pos1, 'end_pos': pos2, 'size': product_size} )
 
 
+#    pp.pprint( products )
+#    pp.pprint( mappings )
+    return products
 
 
-    pp.pprint( products )
-#    return products
-#    exit()
+
+def longest_product( product_dict):
 
     longest_product = 0
     longest_product_primer_pairs = ()
-    for primer1 in mappings.keys():
-        for primer2 in mappings[ primer1 ].keys():
+    for primer1 in product_dict.keys():
+        for primer2 in product_dict[ primer1 ].keys():
         
-            if ( len( mappings[ primer1 ][ primer2 ]) == 0 ):
+#            pp.pprint( product_dict[ primer1 ][ primer2 ] )
+
+            if ( len( product_dict[ primer1 ][ primer2 ]) == 0 ):
                 print "No usable pcr product from %s and %s" % ( primer1, primer2 )
                 continue
-            elif ( len( mappings[ primer1 ][ primer2 ]) > 1 ):
+            elif ( len( product_dict[ primer1 ][ primer2 ]) > 1 ):
                 print "multiple pcr products from %s and %s" % ( primer1, primer2 )
                 continue
 
-            print "%s + %s > %s bp" % (primer1, primer2,  mappings[ primer1 ][ primer2 ][ 0 ])
+#            print "%s + %s > %s bp" % (primer1, primer2,  product_dict[ primer1 ][ primer2 ][0][ 'size' ])
 
-            if ( mappings[ primer1 ][ primer2 ][0] > longest_product ):
-                longest_product = mappings[ primer1 ][ primer2 ][ 0 ]
+            if ( product_dict[ primer1 ][ primer2 ][0] > longest_product ):
+                longest_product = product_dict[ primer1 ][ primer2 ][ 0 ][ 'size' ]
                 longest_product_primer_pairs = ( primer1, primer2 )
-#                print "%s > %s (post)" % (longest_product,  mappings[ primer1 ][ primer2 ][ 0 ])
+#                print "%s > %s (post)" % (longest_product,  product_dict[ primer1 ][ primer2 ][0][ 'size' ])
 
+
+    
 
 
     print "\n\nLongest product (%d bp) comes from the %s and %s primer pair" % (longest_product, 
-                                                                            longest_product_primer_pairs[0], 
-                                                                            longest_product_primer_pairs[1])
-
+                                                                                longest_product_primer_pairs[0], 
+                                                                                longest_product_primer_pairs[1])
+    
     
