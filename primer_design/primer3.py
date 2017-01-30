@@ -17,6 +17,103 @@ if ( __name__ == '__main__'):
     exit( 1 )
 
 
+def markup_sequence( target_sequence, target_chrom, target_start, target_end, target_flank):
+    """
+
+    Tag up a sequence with the target-region, common SNPs found in the region
+    furthermore add a flanking sequence to the target to ensure that the primers are 
+    long enough away from the target to generate sequene. Normally this is about 50bp 
+    that is lost during sanger sequencing
+
+
+    Kim Brugger (17 Aug 2016)
+
+    """
+
+
+    core.verbose_print( "tag_sequence", 2)
+
+    sequence = list(target_sequence)
+    tags = [" "] * len( target_sequence )
+    # Our target base
+    start = target_flank
+    end = len(tags) - target_flank
+
+    for x in range(0, len(tags)):
+        if (x >= start and x <= end):
+            tags[x] = '*'
+
+        if x in range(start - config.TARGET_LEAD, start) or x in range(end, end + config.TARGET_LEAD):
+            tags[x] = '-'
+    #return tags
+        
+
+    core.verbose_print( "::::: %d - %d, %d" % (target_start, target_end, target_flank), 5)
+    # Tag the target sequence, regardless of the nature of the variant only one (1) base is tagged as the target.
+    sequence[ target_flank - config.TARGET_LEAD ] = ' [' + target_sequence [ target_flank - config.TARGET_LEAD ]
+    sequence[(- target_flank + config.TARGET_LEAD) -1 ] = sequence [ (- target_flank + config.TARGET_LEAD) -1 ] + '] '
+
+
+    dbSNPs = core.fetch_known_SNPs( config.DBSNP_FILE, target_chrom, 
+                                    target_start - target_flank, 
+                                    target_end + target_flank )
+
+    masked_positions = []
+
+    for dbSNP in (dbSNPs):
+        #print dbSNP
+        #exit()
+        if ( len( dbSNP ) < 6):
+            continue
+        
+        #unpack dbSNP entry. 
+        (snp_chrom, snp_pos, snp_id, snp_ref, snp_alt, common, vld, caf) = dbSNP
+
+        snp_pos = int( snp_pos )
+        if (snp_pos >= target_start - config.TARGET_LEAD and snp_pos <= target_end + config.TARGET_LEAD ):
+            continue
+
+        if ( common == '1'):
+            #        pp.pprint( dbSNP )
+            mask_pos = snp_pos - (target_start - target_flank) 
+
+        # Sometimes the SNP we are looking at is also in dbsnp, If this is the case we dont tag it twice
+            
+        # In the odd case we are looking at common deletion, mask the whole region. Normally this will just be one base
+            for i in range(0, len(snp_ref)):
+                if (len(sequence)<=  mask_pos + i):
+                    break
+
+                # If already masked skip masking it again.
+                if ( re.search('<', sequence[ mask_pos + i  ]) or 
+                     re.search('\[',sequence[ mask_pos + i  ])):
+                    continue
+
+                sequence[ mask_pos + i  ] = ' <' + sequence[ mask_pos + i ] + '> '
+#                sequence[ mask_pos + i  ] = 
+                tags[  mask_pos + i  ] = 'X'
+
+            else:
+#        target_sequence[ snp_pos - pos + 1  ] = ' {' + target_sequence[ snp_pos - pos + 1  ] + '} '
+                pass
+
+
+
+
+
+    sequence =  "".join( sequence )
+    sequence = re.sub(' ', '', sequence)
+
+
+    #print tags
+    #exit()
+    tagged_string = "".join( tags )
+
+
+    return ( sequence, tagged_string  )
+
+
+
 def write_file(seq_id, seq, primer3_file = "primer3.tmp"):
     """
     Generate the file required to run primer3

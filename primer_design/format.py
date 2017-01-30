@@ -1,8 +1,123 @@
 
+
 import re
 
 import config
 import core
+
+
+
+"""
+  General low level core functions that should be living in a sep module
+
+"""
+
+
+if ( __name__ == '__main__'):
+    sys.stderr.write( "This is a module and not meant to be run as a stand alone program\n" )
+    exit( 1 )
+
+
+def check_if_primer_clash( mapped_list, start, end):
+    """
+    Check if the region where we want to put a primer is alreay 
+    occupied by another primer.
+
+    Input: string, start-pos, end-pos
+    
+    Output: Boolean. True if they do clash
+    
+    Kim Brugger (18 Aug 2016)
+    """
+    
+    core.verbose_print( "check_if_primers_clash", 4)
+    for i in range (start, end):
+        if (mapped_list[ i ]  != " "):
+            return True 
+
+    return False
+
+
+def make_mapped_primer_strings( target_sequence, primer_dict):
+    """
+
+    Aligns a set of primers to a target string. 
+    Tag them up eg: >>>>> RIGHT_3 >>>>> so the string with the primer tag align to the target sequence
+    Collapse primer_tag_string where possigle, ie two primers does not overlap
+    And finally assign colours to each of the primer pairs.
+    
+    input target sequence and primer dict
+    
+    output: list of string with mapped primers, list of list with colours to apply
+    
+    """
+
+    # extract the primer sequences
+    primer_seqs = core.get_primer_seqs( primer_dict )
+    
+    core.verbose_print( "primer_make_mapped_strings", 2)
+    # Align the primers to the target sequence to see where they align
+    mappings = core.align_primers_to_seq(target_sequence, primer_seqs )
+    
+    # data struct for the align primer tagging, initiate with an list the length of the region we are looking at
+    mapped_strings = []
+    mapped_strings.append( [" "]*len( target_sequence ) )
+    # And then assign colour, by default everything is sat to -1 --> nothing in the PDF generation
+    mapped_colours = []
+    mapped_colours.append( [ -1 ]*len( target_sequence ) )
+
+    #
+    for mapping in mappings:
+#        pp.pprint( mapping )
+        ( name, primer, primer_pos, strand ) = mapping
+
+        primer_nr = int(re.sub(r'.*_(\d)',r'\1' , name))
+
+        mapping_index = 0
+
+        # Calculate the number of > (or <) for the primer tag. Length of primer-seq - primer-name - 2 (spacing)
+        arrows = (len(primer)-len(name)-2)/2
+        arrow_type = ">"
+        # Flip the type if on the nagative strand
+        if ( strand == 1 ):
+            primer = core.revDNA( primer )
+            arrow_type = "<"
+
+        # make the tag
+        tag = arrow_type*arrows + " " + name + " " + arrow_type*arrows
+        # If one to short ammend that. What a hack ;-)
+        if ( len(tag) < len(primer)):
+            tag += arrow_type
+            
+        primer = tag 
+
+        mapping_index = 0
+        while( 1 ):
+            if (check_if_primer_clash ( mapped_strings[ mapping_index ], primer_pos, primer_pos + len( primer ))):
+
+                mapping_index += 1
+                
+                # if they do clash create new lists that the mapping_index now will point to.
+                if (len( mapped_strings ) >= mapping_index ):
+                    mapped_strings.append([" "]*len( target_sequence ))
+                    mapped_colours.append([ -1 ]*len( target_sequence ))
+
+            else:
+                break
+
+        # Add the primer to the string mapping_index points to
+        for i in range(0, len( primer)):
+            mapped_strings[ mapping_index ] [ primer_pos + i ] = primer[ i ]
+            mapped_colours[ mapping_index ] [ primer_pos + i ] = primer_nr
+
+
+    # Make the lists into a strings
+    for i in range(0, len(mapped_strings)):
+        mapped_strings[ i ] = "".join( mapped_strings[ i ])
+
+    return mapped_strings, mapped_colours
+
+
 
 
 def pretty_mappings( target_sequence, tagged_string, primer_strings, base1):
@@ -36,21 +151,22 @@ def pretty_mappings( target_sequence, tagged_string, primer_strings, base1):
 
 
 
-#
-# makes a pretty text output of primer informatino
-#
-# input: 
-#        pdf canvas
-#        offset (where to start writing) 
-#        target start
-#        target end
-#        primers
-#        best fwd primer
-#        best rev primer
-#
-# output: string with nicely formatted data
-#
 def pretty_primer_data(primer_dict, target_chrom, target_start, target_end ):
+
+    """
+    makes a pretty text output of primer informatino
+
+    input: 
+          pdf canvas
+          offset (where to start writing) 
+          target start
+          target end
+          primers
+          best fwd primer
+          best rev primer
+
+    output: string with nicely formatted data
+    """
 
     lines = []
 
@@ -103,6 +219,11 @@ def pretty_primer_data(primer_dict, target_chrom, target_start, target_end ):
 
 
 def tabbed_primer_data(target_chrom, target_start, target_end,  primer_dict, fwd_primer=None, rev_primer=None  ):
+    """
+    tabbed primer output, mainly to be used for the website of this project
+
+    """
+
     core.verbose_print("pretty_primer_data", 2)
 
 
@@ -149,6 +270,9 @@ def tabbed_primer_data(target_chrom, target_start, target_end,  primer_dict, fwd
 
 
 def method_blurb():
+    """
+    The medthod section for the reports.
+    """
 
     lines = []
 

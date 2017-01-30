@@ -1,7 +1,8 @@
 """
-   Variables pointing to 3rd party software and databases
+   configuration of location of 3rd party software and databases and design paramters.
 
 """
+
 
 
 VERSION    =  '3.0-beta1'
@@ -19,12 +20,10 @@ SMALT      = '/software/bin/smalt-0.7.6 '
 PRIMER3    = '/software/bin/primer3_core '
 BLASTN     = '/software/packages/ncbi-blast-2.5.0+/bin/blastn'
 BLAST_DB   = '/refs/human_1kg/human_g1k_v37.fasta'
+DBSNP_FILE = '/refs/human_1kg/annots-rsIDs-dbSNPv144.20150605.tab.gz'
+
 
 # data analysis parameters.
-
-
-
-# default parameters, can be overridden by the user (perhaps)
 TARGET_LEAD          = 50
 FLANK                = 500 # amount of bp on either side of the target to design primers in
 NR_PRIMERS           = 4   # Nr of primers to report back
@@ -34,4 +33,6 @@ MAX_PRODUCT          = 1200
 MAX_3_PRIME_MISMATCH = 2
 
 
-
+if ( __name__ == '__main__'):
+    sys.stderr.write( "This is a module and not meant to be run as a stand alone program\n" )
+    exit( 1 )

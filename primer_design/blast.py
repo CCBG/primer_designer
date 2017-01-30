@@ -12,6 +12,12 @@ import config
 import core
 
 
+
+if ( __name__ == '__main__'):
+    sys.stderr.write( "This is a module and not meant to be run as a stand alone program\n" )
+    exit( 1 )
+
+
 def map_primers( region_id, primer3_dict, target_chrom, target_start, target_end):
     """
     Maps primers to the reference using smalt to check where they map.

@@ -333,7 +333,7 @@ def main():
 
 
     target_sequence                   =   primer_design.core.fetch_region( target_chrom, target_start - target_flank, target_end + target_flank     )
-    (tagged_sequence, tagged_region)  =   primer_design.core.markup_sequence(target_sequence, target_chrom, target_start, target_end, target_flank )
+    (tagged_sequence, tagged_region)  =   primer_design.primer3.markup_sequence(target_sequence, target_chrom, target_start, target_end, target_flank )
 
     primer3_results  = primer_design.primer3.run( target_id , tagged_sequence, "%s_%d.primer3" % ( target_chrom, target_start))
 #    primer_dict   = map_primers_smalt( target_id, primer3_results, target_chrom, target_start - target_flank, target_end+ target_flank)
@@ -342,7 +342,7 @@ def main():
     
 
     best_fwd_primer, best_rev_primer = primer_design.analysis.pick_best_primers(primer_dict, target_chrom, target_start, target_end)
-    (mapped_primer_strings, mapped_primer_colours) = primer_design.core.make_mapped_primer_strings( target_sequence, primer_dict)
+    (mapped_primer_strings, mapped_primer_colours) = primer_design.format.make_mapped_primer_strings( target_sequence, primer_dict)
 
 #    pp.pprint( mapped_primer_strings )
 #    pp.pprint( mapped_primer_colours )
