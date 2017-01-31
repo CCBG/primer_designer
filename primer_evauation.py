@@ -12,6 +12,10 @@ pp = pprint.PrettyPrinter(indent=4)
 
 import re
 
+import primer_design.analysis
+import primer_design.core
+
+
 FLANK              = 500
 NR_PRIMERS         = 4
 ALLOWED_MISMATCHES = 4

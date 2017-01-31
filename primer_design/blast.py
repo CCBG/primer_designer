@@ -78,7 +78,7 @@ def map_primers( region_id, primer3_dict, target_chrom, target_start, target_end
 
 #    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results + " 2> /dev/null"
 
-    cmd = "{blastn} -db {blast_db} -word_size 7 -outfmt 7 -query {query} -out {outfile}".format(blastn   = config.BLASTN, 
+    cmd = "{blastn} -db {blast_db}  -max_target_seqs 500 -word_size 7 -outfmt 7 -query {query} -out {outfile}".format(blastn   = config.BLASTN, 
                                                                                                 blast_db = config.BLAST_DB, 
                                                                                                 query    = primers_file,
                                                                                                 outfile  = blastn_results)

@@ -1,7 +1,9 @@
 """
-   configuration of location of 3rd party software and databases and design paramters.
+   Write the report to a PDF document.
 
 """
+
+import re
 
 
 from reportlab.pdfbase import pdfmetrics
@@ -31,7 +33,7 @@ def create_canvas( filename, pagesize=A4 ):
     return c
 
 
-def save_canvas():
+def save():
 
     global c
 
@@ -41,7 +43,7 @@ def save_canvas():
 
 
 def set_top_offset( new_offset ):
-    assert new_offset.isdigit(), "Int not provided as arguement"
+    assert isinstance(new_offset, float), "Int not provided as arguement"
 
     global top_offset
     top_offset = new_offset
@@ -235,8 +237,11 @@ def primer_data(target_chrom, target_start, target_end, primer_dict, fwd_primer=
 
     return top_offset
 
-def method(c, top_offset):
+def method():
     core.verbose_print("pretty_pdf_method", 3)
+
+    global top_offset
+
 
     lines = format.method_blurb()
 

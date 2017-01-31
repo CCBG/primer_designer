@@ -14,15 +14,8 @@ import shlex
 import subprocess
 import re
 
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfbase.pdfmetrics import stringWidth 
-from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
-width, height = A4 #keep for later
 
-
-import primer_design_module as pd
 import primer_design.core
 import primer_design.config
 import primer_design.primer3
@@ -30,221 +23,7 @@ import primer_design.blast
 import primer_design.printing
 import primer_design.format
 import primer_design.analysis
-
-
-# colours for the primer rendering:
-
-colours = [[255,   0,   0], # red
-           [  0, 255,   0], # green
-           [  0,   0, 255], # blue
-           [255,   0, 255], # Pink
-           [0,   255, 255],
-           [255, 255,   0], #Dark Green
-           [100, 255, 100]] # Yellow, crap!
-
-
-def pretty_pdf_mappings(c, top_offset,  target_sequence, tagged_string, primer_strings, primer_colours, base1):
-    """
-
-    makes a pretty text output of target region and primers in a pdf canvas
-    
-    input: canvas, 
-           offset (where to start writing) 
-           target sequence
-           target snp/target string, 
-           mapped primers,
-           colours to apply to the primer arrows
-           position of first base of the reference region
-           
-           output: string with nicely formatted data
-           
-    """
-
-    primer_design.core.verbose_print("pretty_pdf_mappings", 2)
-
-    lines = []
-    
-    for i in range(0, len(target_sequence), 80):
-
-
-#        c.drawString(40, top_offset, "%-9d  %s" % ( base1+ i, target_sequence[i: i+80]))
-#        top_offset -= 8
-#        c.drawString(40, top_offset, "           " + tagged_string[i: i+80])
-#        top_offset -= 8
-
-        p_line = "%-9d  %s" % ( base1+ i, target_sequence[i: i+80])
-        m_line = "           " + tagged_string[i: i+80]
-
-
-        x_offset = 40
-        for k in range(0, len(p_line)):
-
-            if (m_line[ k ] == "X"):
-                c.setFillColorRGB(255,0,0)
-            elif (m_line[ k ] == "*"):
-                c.setFillColorRGB(0,190,0)
-
-            c.drawString(x_offset , top_offset, p_line[k])
-            x_offset += stringWidth(" ", 'mono', 8)
-            c.setFillColorRGB(0,0,0)
-
-
-        top_offset -= 8
-
-        m_line = re.sub(r'X', r' ', m_line)
-
-        if (re.search(r'\*', m_line) or re.search(r'\-', m_line)):
-            c.setFillColorRGB(0,190,0)
-            c.drawString(40 , top_offset, m_line)
-            c.setFillColorRGB(0,0,0)
-
-            top_offset -= 8
-
-
-#        if (m_line.search(r'\*', name) :
-
-
-        for j in range(0, len(primer_strings)):
-            primer_string = primer_strings[ j ]
-            primer_colour = primer_colours[ j ]
-
-            line = primer_string[i: i+80]
-            if ( re.match(r'^ *$', line)):
-                continue
-
-            x_offset = 40 + stringWidth(" ", 'mono', 8)*11
-
-            for k in range(i, i+80):
-                if ( k > len(target_sequence) - 1):
-                    break
-
-                if ( primer_colour[k] >= 0 ):
-
-                    c.setFillColorRGB(colours[ primer_colour[k] ][0], 
-                                      colours[ primer_colour[k] ][1],
-                                      colours[ primer_colour[k] ][2])
-
-                c.drawString(x_offset , top_offset, primer_string[k])
-                x_offset += stringWidth(" ", 'mono', 8)
-                c.setFillColorRGB(0,0,0)
-
-
-            top_offset -= 8
-
-        top_offset -= 8
-
-    return top_offset
-
-
-
-#
-# makes a pretty text output of primer informatino
-#
-# input: 
-#        pdf canvas
-#        offset (where to start writing) 
-#        target start
-#        target end
-#        primers
-#        best fwd primer
-#        best rev primer
-#
-# output: string with nicely formatted data
-#
-def pretty_pdf_primer_data(c, y_offset, target_chrom, target_start, target_end, primer_dict, fwd_primer=None, rev_primer=None ):
-    primer_design.core.verbose_print("pretty_pdf_primer_data", 2)
-
-#    c.drawString(40 , y_offset, "_-=-"*15 +"_" )
-    c.line(40,y_offset,width - 40  ,y_offset+2)
-    y_offset -= 8
-
-
-    if ( target_start == target_end ):
-        c.drawString(40 , y_offset, "Primer design report for chr: %s position: %d" % (target_chrom, target_start))
-    else:
-        c.drawString(40 , y_offset, "Primer design report for chr: %s range: %d-%d" % (target_chrom, 
-                                                                                       target_start, target_end))
-            
-    y_offset -= 8
-    c.line(40,y_offset,width - 40 ,y_offset+2)
-    y_offset -= 16
-
-    c.drawString(40 , y_offset, "ID         POS             %GC    TM     Primer sequence           Mapping(s)    ")
-    y_offset -= 8
-    c.line(40,y_offset,width - 40 ,y_offset+2)
-    y_offset -= 8
-
-
-
-
-    primer_seqs = []
-    for primer in sorted(primer_dict):
-        if ( primer == 'FULLSEQ'):
-            continue
-
-
-        name = primer
-        name = re.sub(r'PRIMER_', '', name)
-        name = re.sub(r'_SEQUENCE', '', name)
-
-        
-        if (name == "RIGHT_0"):
-            y_offset -= 8
-
-        picked_primer = ' '
-
-        if ( fwd_primer == primer or rev_primer == primer):
-            picked_primer = 'Y'
-
-        c.drawString(40 , y_offset, "%-10s %-14s  %.2f  %.2f  %-25s %s            %s" % ("", 
-                                    "%s:%d" % (primer_dict[ name ][ "TARGET_CHROM"], primer_dict[ name ][ "TARGET_POS"]),
-                                    primer_dict[ name ][ "GC_PERCENT"], 
-                                    primer_dict[ name ][ "TM"],
-                                    primer_dict[ name ][ "SEQ"], picked_primer,
-                                    primer_dict[ name ][ 'MAPPING_SUMMARY' ]))
-
-
-
-        primer_nr = re.sub(r'.*_(\d)',r'\1' , name)
-
-#        pp.pprint( primer_nr )
-#        print pp.pprint(colours[ int( primer_nr ) ])
-        
-
-        c.setFillColorRGB(colours[ int( primer_nr ) ][0], 
-                          colours[ int( primer_nr ) ][1],
-                          colours[ int( primer_nr ) ][2])
-
-        c.drawString(40 , y_offset, name)
-        c.setFillColorRGB(0,0,0)
-        y_offset -= 8
-
-
-            
-
-
-
-    y_offset -= 8
-    c.line(40,y_offset,width - 40 ,y_offset+2)
-    y_offset -= 8
-    y_offset -= 8
-
-
-    return y_offset
-
-def pretty_pdf_method(c, top_offset):
-    primer_design.core.verbose_print("pretty_pdf_method", 3)
-
-    lines = primer_design.format.method_blurb()
-
-    top_offset = 80
-
-    for line in lines:
-        c.drawString(40, top_offset, line)
-        top_offset -= 8
-
-
-
+import primer_design.pdf
 
 
 def get_and_parse_arguments():
@@ -254,32 +33,26 @@ def get_and_parse_arguments():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-c', '--chrom')
-    
-    # NICK ADDED RANGE
-    
     group = parser.add_mutually_exclusive_group( required = True )
-    group.add_argument('-p', '--pos')
-    group.add_argument('-r', '--range', nargs = 2)
+    group.add_argument('-r', '--range' )
 
     parser.add_argument('-o', '--output')
-    parser.add_argument('-f', '--flank')
     parser.add_argument('-t', '--text_output', action="store_true")
     parser.add_argument('-w', '--website_output', action="store_true")
 
     args = parser.parse_args()
 
-
-
-    if ( args.range ):
-        args.target_start, args.target_end = [int(x) for x in args.range]
+    pp.pprint(args.range)
+    assert re.match(r'(\d+|[XY]):\d+$', args.range ) or re.match(r'(\d+|[XY]):\d+-\d+$', args.range), "Range needs to be in the following format: Chr:Pos or Chr:Pos-Pos"
+    (args.chrom, region) = args.range.split(":")
+    
+    if ( re.match(r'\d+-\d+', region)):
+        args.target_start, args.target_end = map( int, (region.split("-")))
     else:
-        args.target_start = int( args.pos )
-        args.target_end   = int( args.pos )
-
+        print region
+        args.target_start, args.target_end = map( int, [region, region])
+        
     # how many bp on either side are to be used for designing primers in
-    args.target_flank = args.flank or primer_design.config.FLANK
-    args.target_flank = int( primer_design.config.FLANK )
     
     if ( args.target_start == args.target_end):
         args.target_id = "%s:%d" % ( args.chrom, args.target_start)
@@ -294,6 +67,7 @@ def get_and_parse_arguments():
         
     args.filename = args.filename.rstrip(".pdf")
     args.filename = args.filename.rstrip(".txt")
+
 
 
 
@@ -314,11 +88,13 @@ def get_and_parse_arguments():
 def main():
 
     args = get_and_parse_arguments()
+#    pp.pprint( args )
+#    exit()
 
     target_chrom    = args.chrom
     target_start    = args.target_start
     target_end      = args.target_end
-    target_flank    = args.target_flank
+    target_flank    = primer_design.config.FLANK
     target_id       = args.target_id
     target_filename = args.filename
 
@@ -341,8 +117,17 @@ def main():
 #    pp.pprint( primer_dict )
     
 
-    best_fwd_primer, best_rev_primer = primer_design.analysis.pick_best_primers(primer_dict, target_chrom, target_start, target_end)
+
+#    best_fwd_primer, best_rev_primer = primer_design.analysis.pick_best_primers(primer_dict, target_chrom, target_start, target_end)
     (mapped_primer_strings, mapped_primer_colours) = primer_design.format.make_mapped_primer_strings( target_sequence, primer_dict)
+
+    ePCR_products = primer_design.analysis.digital_PCR( primer_dict )
+    (best_fwd_primer, best_rev_primer, size) = primer_design.analysis.best_product( ePCR_products )
+    multiple_mappings = primer_design.analysis.multiple_products( ePCR_products )
+
+    for primer in multiple_mappings:
+        primer_dict[ primer][ 'MULTIPLE_MAPPINGS' ] = ", ".join( multiple_mappings[ primer ])
+
 
 #    pp.pprint( mapped_primer_strings )
 #    pp.pprint( mapped_primer_colours )
@@ -364,22 +149,20 @@ def main():
 
     else:
         target_filename = "%s.pdf" % target_filename
-        c = canvas.Canvas( target_filename , pagesize=A4)
+
+        primer_design.pdf.create_canvas( target_filename )
     
         width, height = A4 #keep for later
-        
-        font = TTFont('mono', '/usr/share/fonts/truetype/ttf-liberation/LiberationMono-Regular.ttf')
-        pdfmetrics.registerFont( font )
-        c.setFont('mono', 7)
-        top_offset = pretty_pdf_primer_data(c, height - 30, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
+
+        print height
+        primer_design.pdf.set_top_offset( height - 30 )        
+        primer_design.pdf.primer_data(target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
             
-        c.setFont('mono', 8)
-        pretty_pdf_mappings(c, top_offset,  target_sequence, tagged_region, mapped_primer_strings, mapped_primer_colours, target_start - primer_design.config.FLANK)
+        primer_design.pdf.mappings(target_sequence, tagged_region, mapped_primer_strings, mapped_primer_colours, target_start - primer_design.config.FLANK)
 
-        pretty_pdf_method(c, top_offset)
+        primer_design.pdf.method()
 
-        c.showPage()
-        c.save()
+        primer_design.pdf.save()
 
     primer_design.core.delete_tmp_files()
 

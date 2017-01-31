@@ -93,8 +93,9 @@ def digital_PCR( primer_mappings ):
 
     products = {}
 
-    for i in range(0, nr_primer_names):
-        primer1 = primer_names[ i ] 
+#    for i in range(0, nr_primer_names):
+    for primer1 in primer_names:
+#        primer1 = primer_names[ i ] 
 
         if ( primer1 == 'FULLSEQ'):
             continue
@@ -105,8 +106,10 @@ def digital_PCR( primer_mappings ):
         mappings[ primer1 ] = {}
         products[ primer1 ] = {}
 
-        for j in range(0, nr_primer_names):
-            primer2 = primer_names[ j ] 
+        for primer2 in primer_names:
+#        for j in range(0, nr_primer_names):
+
+#            primer2 = primer_names[ j ] 
 
             if ( primer2 == 'FULLSEQ'):
                 continue
@@ -118,6 +121,7 @@ def digital_PCR( primer_mappings ):
             mappings[ primer1 ][ primer2 ] = []
             products[ primer1 ][ primer2 ] = []
 
+            multiple_products = 0
 
 #            print " -- %s vs %s"  % (primer1, primer2)
 
@@ -141,6 +145,10 @@ def digital_PCR( primer_mappings ):
                     if ( strand1 == strand2 ):
                         continue
 
+                    # Calculate the product size, and check if it is in a doable range
+                    product_size = ( pos2 - pos1 )
+                    if ( product_size < 0  or product_size > config.MAX_PRODUCT_SIZE):
+                        continue
 
                     # Make sure that the strand is in the right orientation.
                     if ( pos1 < pos2 and strand1 != 'plus' and strand2 != 'minus'):
@@ -149,10 +157,6 @@ def digital_PCR( primer_mappings ):
                         continue
 
 
-                    # Calculate the product size, and check if it is in a doable range
-                    product_size = ( pos2 - pos1 )
-                    if ( product_size < 0  or product_size > config.MAX_PRODUCT_SIZE):
-                        continue
 
 
                     print "%s -- %s %s:%d:%s -> %s:%d:%s ==>> %d bp" %( primer1, primer2, chr1, pos1, strand1, chr2, pos2, strand2, product_size)
@@ -160,6 +164,13 @@ def digital_PCR( primer_mappings ):
                     mappings[ primer1 ][ primer2 ].append( product_size )
                     products[ primer1 ][ primer2 ].append( {'chr' : chr1, 'start_pos': pos1, 'end_pos': pos2, 'size': product_size} )
 
+                    if ( len(products[ primer1 ][ primer2 ]) > 5):
+                        print "Got more than 5 hits... %s -- %s "  % ( primer1, primer2 )
+                        multiple_products = 1
+                        break
+
+                if ( multiple_products ):
+                    break
 
 #    pp.pprint( products )
 #    pp.pprint( mappings )
@@ -167,14 +178,48 @@ def digital_PCR( primer_mappings ):
 
 
 
-def longest_product( product_dict):
+
+def multiple_products( product_dict ):
+    """
+    finds primer pairs generating multiple products
+
+    input: 
+         a primer product dict ( from digital_PCR )
+
+    return: 
+          a dict of list with the primer pairs that generage multiple
+          products.
+
+    """
+
+    multi_dict = {}
+
+
+    for primer1 in product_dict.keys():
+        for primer2 in product_dict[ primer1 ].keys():
+        
+
+            if ( len( product_dict[ primer1 ][ primer2 ]) > 1 ):
+                print "multiple pcr products from %s and %s" % ( primer1, primer2 )
+                if primer1 not in multi_dict:
+                    multi_dict[ primer1 ] = []
+                if primer2 not in multi_dict:
+                    multi_dict[ primer2 ] = []
+
+                multi_dict[ primer1 ].append( primer2 )
+                multi_dict[ primer2 ].append( primer1 )
+
+
+    return multi_dict
+
+
+def best_product( product_dict ):
 
     longest_product = 0
     longest_product_primer_pairs = ()
     for primer1 in product_dict.keys():
         for primer2 in product_dict[ primer1 ].keys():
         
-#            pp.pprint( product_dict[ primer1 ][ primer2 ] )
 
             if ( len( product_dict[ primer1 ][ primer2 ]) == 0 ):
                 print "No usable pcr product from %s and %s" % ( primer1, primer2 )
@@ -183,19 +228,15 @@ def longest_product( product_dict):
                 print "multiple pcr products from %s and %s" % ( primer1, primer2 )
                 continue
 
-#            print "%s + %s > %s bp" % (primer1, primer2,  product_dict[ primer1 ][ primer2 ][0][ 'size' ])
 
-            if ( product_dict[ primer1 ][ primer2 ][0] > longest_product ):
+            if ( product_dict[ primer1 ][ primer2 ][0][ 'size' ] < config.MAX_PRODUCT and product_dict[ primer1 ][ primer2 ][0][ 'size' ] > longest_product ):
                 longest_product = product_dict[ primer1 ][ primer2 ][ 0 ][ 'size' ]
                 longest_product_primer_pairs = ( primer1, primer2 )
-#                print "%s > %s (post)" % (longest_product,  product_dict[ primer1 ][ primer2 ][0][ 'size' ])
 
-
-    
-
-
-    print "\n\nLongest product (%d bp) comes from the %s and %s primer pair" % (longest_product, 
+    core.verbose_print( "\n\nLongest product (%d bp) comes from the %s and %s primer pair" % (longest_product, 
                                                                                 longest_product_primer_pairs[0], 
-                                                                                longest_product_primer_pairs[1])
+                                                                                longest_product_primer_pairs[1]), 5)
     
     
+    return longest_product_primer_pairs[0], longest_product_primer_pairs[1], longest_product
+ 
