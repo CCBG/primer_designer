@@ -5,7 +5,7 @@
 
 
 
-VERSION    =  '3.0-beta1'
+VERSION    =  '3.0'
 
 # External tools and databases used by the program
 SMALT      = '/software/bin/smalt-0.7.6 '
