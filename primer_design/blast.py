@@ -33,7 +33,7 @@ def map_primers( region_id, primer3_dict, target_chrom, target_start, target_end
 
     res = dict()
 
-    primers_file = core.tmpfilename(path = 'tmp/', postfix='_p3.fasta')
+    primers_file = core.tmpfilename(path = '/tmp/', postfix='_p3.fasta')
     core.add_new_tmp_file( primers_file )
 
     with open( primers_file, 'w+') as primerfasta:
@@ -71,7 +71,7 @@ def map_primers( region_id, primer3_dict, target_chrom, target_start, target_end
 
         primerfasta.close()
 
-    blastn_results = core.tmpfilename(path = 'tmp/', postfix='.blastn')
+    blastn_results = core.tmpfilename(path = '/tmp/', postfix='.blastn')
 #    pp.pprint( res )
     core.add_new_tmp_file( blastn_results )
 
