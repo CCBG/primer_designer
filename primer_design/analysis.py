@@ -43,7 +43,7 @@ def pick_best_primers( primer_data, chromo, start_pos, end_pos ):
 
         if ( not primer_data[ primer ][ 'CHR' ] or primer_data[ primer ][ 'CHR' ][ 0 ] != chromo ):
             core.verbose_print( "No mapping or Unique mapping to different chromosome (%s). Should never happen! " % primer, 5)
-            pp.pprint( primer_data[ primer ] )
+#            pp.pprint( primer_data[ primer ] )
             continue
 
         if  (primer.find( 'LEFT' ) >= 0):
@@ -233,10 +233,13 @@ def best_product( product_dict ):
                 longest_product = product_dict[ primer1 ][ primer2 ][ 0 ][ 'size' ]
                 longest_product_primer_pairs = ( primer1, primer2 )
 
-    core.verbose_print( "\n\nLongest product (%d bp) comes from the %s and %s primer pair" % (longest_product, 
+    
+
+    if  longest_product:
+        core.verbose_print( "\n\nLongest product (%d bp) comes from the %s and %s primer pair" % (longest_product, 
                                                                                 longest_product_primer_pairs[0], 
                                                                                 longest_product_primer_pairs[1]), 5)
-    
-    
-    return longest_product_primer_pairs[0], longest_product_primer_pairs[1], longest_product
+        return longest_product_primer_pairs[0], longest_product_primer_pairs[1], longest_product
+    else:
+        return None, None, None
  

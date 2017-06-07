@@ -17,7 +17,7 @@ if ( __name__ == '__main__'):
     exit( 1 )
 
 
-def markup_sequence( target_sequence, target_chrom, target_start, target_end, target_flank):
+def markup_sequence( target_sequence, target_chrom, target_start, target_end, target_flank, target_lead=config.TARGET_LEAD):
     """
 
     Tag up a sequence with the target-region, common SNPs found in the region
@@ -43,15 +43,15 @@ def markup_sequence( target_sequence, target_chrom, target_start, target_end, ta
         if (x >= start and x <= end):
             tags[x] = '*'
 
-        if x in range(start - config.TARGET_LEAD, start) or x in range(end, end + config.TARGET_LEAD):
+        if x in range(start - target_lead, start) or x in range(end, end + target_lead):
             tags[x] = '-'
     #return tags
         
 
     core.verbose_print( "::::: %d - %d, %d" % (target_start, target_end, target_flank), 5)
     # Tag the target sequence, regardless of the nature of the variant only one (1) base is tagged as the target.
-    sequence[ target_flank - config.TARGET_LEAD ] = ' [' + target_sequence [ target_flank - config.TARGET_LEAD ]
-    sequence[(- target_flank + config.TARGET_LEAD) -1 ] = sequence [ (- target_flank + config.TARGET_LEAD) -1 ] + '] '
+    sequence[ target_flank - target_lead ] = ' [' + target_sequence [ target_flank - target_lead ]
+    sequence[(- target_flank + target_lead) -1 ] = sequence [ (- target_flank + target_lead) -1 ] + '] '
 
 
     dbSNPs = core.fetch_known_SNPs( config.DBSNP_FILE, target_chrom, 
@@ -70,7 +70,7 @@ def markup_sequence( target_sequence, target_chrom, target_start, target_end, ta
         (snp_chrom, snp_pos, snp_id, snp_ref, snp_alt, common, vld, caf) = dbSNP
 
         snp_pos = int( snp_pos )
-        if (snp_pos >= target_start - config.TARGET_LEAD and snp_pos <= target_end + config.TARGET_LEAD ):
+        if (snp_pos >= target_start - target_lead and snp_pos <= target_end + target_lead ):
             continue
 
         if ( common == '1'):
@@ -294,11 +294,13 @@ def run( seq_id, seq, primer3_file = ""):
 
     core.verbose_print( "run_primer3", 2)
 
-    if ( primer3_file == "" ):
+    if ( primer3_file is None or primer3_file == "" ):
         primer3_file = seq_id + ".primer3"
 
 
     primer3_file = re.sub(":", "_", primer3_file)
+
+    print "PRIMER3 file: ", primer3_file
 
 
     core.add_new_tmp_file( primer3_file )

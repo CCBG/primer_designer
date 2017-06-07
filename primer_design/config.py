@@ -25,12 +25,17 @@ DBSNP_FILE = '/refs/human_1kg/annots-rsIDs-dbSNPv144.20150605.tab.gz'
 TARGET_LEAD          = 50   # the nr of bases not expected to be low qulity sequence from the seq. primer
 FLANK                = 500  # amount of bp on either side of the target to design primers in
 NR_PRIMERS           = 4    # Nr of primers to report back
-ALLOWED_MISMATCHES   = 4    # Maximum nr of errors when mapping a primer back to the reference
-MAX_MAPPINGS         = 5    # Less or equal number of mappings to the reference what chromosomes mapped to are named 
-MAX_PRODUCT          = 800 # for product to be sanger sequenced.
+ALLOWED_MISMATCHES   = 2    # Maximum nr of errors when mapping a primer back to the reference
 MAX_3_PRIME_MISMATCH = 2
+MAX_MAPPINGS         = 3    # Less or equal number of mappings to the reference what chromosomes mapped to are named 
+MAX_PRODUCT          = 800 # for product to be sanger sequenced.
 MAX_PRODUCT_SIZE     = 2000 # For non-specfic products
 MIN_PRODUCT_SIZE     = 120
+
+PAGE_WIDTH           = 150
+MAX_GEMONE_MAPPINGS  = 100
+PLUS_STRAND          =   0
+MINUS_STRAND         =   1
 
 
 if ( __name__ == '__main__'):

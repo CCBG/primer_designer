@@ -5,6 +5,7 @@ import re
 import config
 import core
 
+import pprint as pp
 
 
 """
@@ -69,7 +70,8 @@ def make_mapped_primer_strings( target_sequence, primer_dict):
     #
     for mapping in mappings:
 #        pp.pprint( mapping )
-        ( name, primer, primer_pos, strand ) = mapping
+        ( name, primer, primer_pos, strand, primer_id ) = mapping
+        ( name, primer, primer_pos, strand, primer_id ) = mapping
 
         primer_nr = int(re.sub(r'.*_(\d)',r'\1' , name))
 
@@ -280,5 +282,283 @@ def method_blurb():
 
     lines.append('Common SNP annotation: A common SNP is one that has at least one 1000Genomes population with a minor ')
     lines.append('allele of frequency >= 1% and for which 2 or more founders contribute to that minor allele frequency.')
+
+    return lines
+
+
+import pprint as pp
+
+def exon_region(target_start, exon_start, exon_end):
+    exon_string =  [ " " ]*( exon_end  - target_start + 1 ) 
+    exon_colours = [  -1 ]*( exon_end  - target_start + 1 ) 
+    
+    for x in range( exon_start - target_start+1, exon_end - target_start + 1):
+        exon_string[ x ] = 'E'
+        exon_colours[ x ] = 2
+
+    return  "".join(exon_string), exon_colours
+
+
+def html_exon_region(target_start, exon_start, exon_end):
+    exon_string =  [" "]*( exon_end  - target_start + 1 ) 
+
+
+    
+    for x in range( exon_start - target_start+1, exon_end - target_start + 1):
+        exon_string[ x ] = '<font style="background-color:#009900">' + 'E' + '</font>'
+
+
+    return  exon_string 
+
+
+def html_markup_sequence( target_sequence, target_chrom, target_start, target_end, target_flank):
+    core.verbose_print( "tag_sequence", 2)
+
+    sequence = list(target_sequence)
+    # Our target base
+    start = target_flank
+    end = len(target_sequence) - target_flank
+
+#    sequence[ start  ] = '<font class="bg-success">' + sequence[ start ]
+
+#    sequence[ start  ] = '<font style="background-color:#bfff00">' + sequence[ start ]
+#    sequence[ end  ]   = sequence[ end ] + '</font>' 
+
+    for x in range( start, end):
+        sequence[ x  ] = '<font style="background-color:#bfff00">' + sequence[ x ]+'</font>'
+
+    for x in range( target_flank - config.TARGET_LEAD, start):
+        sequence[ x  ] = '<font style="background-color:#ffbf00">' + sequence[ x ]+'</font>'
+
+    for x in range( end, end+config.TARGET_LEAD):
+        sequence[ x  ] = '<font style="background-color:#ffbf00">' + sequence[ x ]+'</font>'
+#        sequence[ x  ] = '<font class="bg-warning">' + sequence[ x ]+'</font>'
+
+
+
+    dbSNPs = core.fetch_known_SNPs( '/refs/human_1kg/annots-rsIDs-dbSNPv144.20150605.tab.gz', target_chrom, 
+                                                                                              target_start - target_flank, 
+                                                                                              target_end + target_flank )
+
+    masked_positions = []
+
+    for dbSNP in (dbSNPs):
+        #print dbSNP
+        #exit()
+        if ( len( dbSNP ) < 6):
+            continue
+        
+        #unpack dbSNP entry. 
+        (snp_chrom, snp_pos, snp_id, snp_ref, snp_alt, common, vld, caf) = dbSNP
+
+        snp_pos = int( snp_pos )
+        if (snp_pos >= target_start - config.TARGET_LEAD and snp_pos <= target_end + config.TARGET_LEAD ):
+            continue
+
+        if ( common == '1'):
+            #        pp.pprint( dbSNP )
+            mask_pos = snp_pos - (target_start - target_flank) 
+
+        # Sometimes the SNP we are looking at is also in dbsnp, If this is the case we dont tag it twice
+            
+        # In the odd case we are looking at common deletion, mask the whole region. Normally this will just be one base
+            for i in range(0, len(snp_ref)):
+                if (len(sequence)<=  mask_pos + i):
+                    break
+
+                # If already masked skip masking it again.
+                if ( re.search('<', sequence[ mask_pos + i  ]) or 
+                     re.search('\[',sequence[ mask_pos + i  ])):
+                    continue
+
+#                sequence[ mask_pos + i  ] = '<font class="bg-danger">' + sequence[ mask_pos + i ] + '</font>'
+                sequence[ mask_pos + i  ] = '<font style="background-color:#ff0040">' + sequence[ mask_pos + i ] + '</font>'
+
+
+            else:
+#        target_sequence[ snp_pos - pos + 1  ] = ' {' + target_sequence[ snp_pos - pos + 1  ] + '} '
+                pass
+
+
+
+
+    return sequence
+    sequence =  "".join( sequence )
+#    sequence = re.sub(' ', '', sequence)
+
+
+
+
+
+
+def html_markup_SNPs_sequence(sequence,  chrom, start, end ):
+    core.verbose_print( "html_markup_SNP_sequence", 2)
+
+    sequence = list(sequence)
+    # Our target base
+
+    dbSNPs = core.fetch_known_SNPs( '/refs/human_1kg/annots-rsIDs-dbSNPv144.20150605.tab.gz', chrom, 
+                                                                                              start, 
+                                                                                              end )
+
+    masked_positions = []
+
+    for dbSNP in (dbSNPs):
+        #print dbSNP
+        #exit()
+        if ( len( dbSNP ) < 6):
+            continue
+        
+        #unpack dbSNP entry. 
+        (snp_chrom, snp_pos, snp_id, snp_ref, snp_alt, common, vld, caf) = dbSNP
+
+        snp_pos = int( snp_pos )
+
+        if ( common == '1'):
+            #        pp.pprint( dbSNP )
+            mask_pos = snp_pos - start 
+
+        # Sometimes the SNP we are looking at is also in dbsnp, If this is the case we dont tag it twice
+            
+        # In the odd case we are looking at common deletion, mask the whole region. Normally this will just be one base
+            for i in range(0, len(snp_ref)):
+                if (len(sequence)<=  mask_pos + i):
+                    break
+
+                # If already masked skip masking it again.
+                if ( re.search('<', sequence[ mask_pos + i  ]) or 
+                     re.search('\[',sequence[ mask_pos + i  ])):
+                    continue
+
+#                sequence[ mask_pos + i  ] = '<font class="bg-danger">' + sequence[ mask_pos + i ] + '</font>'
+                sequence[ mask_pos + i  ] = '<font style="background-color:#ff0040">' + sequence[ mask_pos + i ] + '</font>'
+
+
+            else:
+#        target_sequence[ snp_pos - pos + 1  ] = ' {' + target_sequence[ snp_pos - pos + 1  ] + '} '
+                pass
+
+
+
+
+    return sequence
+    sequence =  "".join( sequence )
+#    sequence = re.sub(' ', '', sequence)
+
+
+
+
+#
+# Aligns a set of primers to a target string. 
+# Tag them up eg: >>>>> RIGHT_3 >>>>> so the string with the primer tag align to the target sequence
+# Collapse primer_tag_string where possigle, ie two primers does not overlap
+# And finally assign colours to each of the primer pairs.
+#
+# input target sequence and primer dict
+#
+# output: list of string with mapped primers, list of list with colours to apply
+#
+def html_mapped_primer_strings( target_sequence, primer_dict):
+
+
+
+
+    # extract the primer sequences
+    primer_seqs = core.get_primer_seqs( primer_dict )
+    
+    core.verbose_print( "primer_make_mapped_strings", 2)
+    # Align the primers to the target sequence to see where they align
+    mappings = core.align_primers_to_seq(target_sequence, primer_seqs )
+
+
+    
+    # data struct for the align primer tagging, initiate with an list the length of the region we are looking at
+    mapped_strings = []
+    mapped_strings.append( [" "]*len( target_sequence ) )
+
+    #
+    for mapping in mappings:
+#        pp.pprint( mapping )
+        ( name, primer, primer_pos, strand, primer_id ) = mapping
+
+#        primer_nr = int(re.sub(r'.*_(\d)',r'\1' , name))
+
+        mapping_index = 0
+
+        # Calculate the number of > (or <) for the primer tag. Length of primer-seq - primer-name - 2 (spacing)
+        arrows = (len(primer)-len(name)-2)/2
+        arrow_type = ">"
+        # Flip the type if on the nagative strand
+        if ( strand == 1 ):
+            primer = core.revDNA( primer )
+            arrow_type = "<"
+
+        # make the tag
+        tag = arrow_type*arrows + " " + name + " " + arrow_type*arrows
+        # If one to short ammend that. What a hack ;-)
+        if ( len(tag) < len(primer)):
+            tag += arrow_type
+            
+        primer = tag 
+
+        mapping_index = 0
+        while( 1 ):
+            if (check_if_primer_clash ( mapped_strings[ mapping_index ], primer_pos, primer_pos + len( primer ))):
+
+                mapping_index += 1
+                
+                # if they do clash create new lists that the mapping_index now will point to.
+                if (len( mapped_strings ) >= mapping_index ):
+                    mapped_strings.append([" "]*len( target_sequence ))
+
+            else:
+                break
+
+        # Add the primer to the string mapping_index points to
+
+
+        primer_colour_class = "label-info"
+        if name.find('RIGHT'):
+            primer_colour_class = "label-primary"
+        
+        for i in range(0, len( primer)):
+#            mapped_strings[ mapping_index ] [ primer_pos + i ] = '<font class="primer_map_' + str(primer_id) + '" style="background-color:#ff8000">' + primer[ i ] +'</font>'
+            mapped_strings[ mapping_index ] [ primer_pos + i ] = '<font class="primer_map_' + str(primer_id) + ' ' + primer_colour_class +'">' + primer[ i ] +'</font>'
+            
+
+    mappings_dict = {}
+    for name, seq, position, strand, primer_id in mappings:
+        mappings_dict[ 'name' ] = position
+
+
+
+    return mapped_strings, mappings_dict
+
+
+
+
+#
+# makes a pretty text output of target region and primers.
+#
+# input: target snp/target string, mapped primers, position of first base of the reference region
+#
+# output: string with nicely formatted data
+#
+def split_lines( target_sequence, primer_strings, chrom, base1):
+
+    lines = []
+
+    
+    for i in range(0, len(target_sequence), config.PAGE_WIDTH):
+
+
+        lines.append("%-2s:%-9d  %s" % ( str(chrom), base1+ i, "".join(target_sequence[i: i + config.PAGE_WIDTH])))
+
+        for primer_string in ( primer_strings ):
+            line =  "              " + "".join(primer_string[i: i + config.PAGE_WIDTH])
+            if ( not re.match(r'^ *$', line)):
+                lines.append( line )
+
+#        lines.append( "" )
 
     return lines

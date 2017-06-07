@@ -16,11 +16,14 @@ import re
 
 from reportlab.lib.pagesizes import A4
 
+# This is a bit hacky, but it is an easy way to point to the local primer_design modules
+path = os.path.dirname(os.path.realpath(__file__))
+sys.path.append( path + "/../")
+
 import primer_design.core
 import primer_design.config
 import primer_design.primer3
 import primer_design.blast
-import primer_design.printing
 import primer_design.format
 import primer_design.analysis
 import primer_design.pdf
@@ -38,7 +41,6 @@ def get_and_parse_arguments():
 
     parser.add_argument('-o', '--output')
     parser.add_argument('-t', '--text_output', action="store_true")
-    parser.add_argument('-w', '--website_output', action="store_true")
 
     args = parser.parse_args()
 
@@ -98,10 +100,14 @@ def main():
     target_id       = args.target_id
     target_filename = args.filename
 
+    exon_string     = None
+    exon_colours    = None
+
     ( exon_chrom, exon_start, exon_end) = primer_design.core.map_target_region_to_exon( target_chrom, target_start, target_end)
 
     if ( exon_start is not None and  exon_end is not None  and exon_end - exon_start + 1 < primer_design.config.MAX_PRODUCT):
         primer_design.core.verbose_print("Changing region to an exonic region (%s:%d-%d)" % (exon_chrom, exon_start, exon_end), 1)
+        exon_string,exon_colours  = primer_design.format.exon_region(target_start - primer_design.config.FLANK, exon_start, exon_end)
         target_start = exon_start
         target_end   = exon_end
 
@@ -114,12 +120,13 @@ def main():
     primer3_results  = primer_design.primer3.run( target_id , tagged_sequence, "%s_%d.primer3" % ( target_chrom, target_start))
 #    primer_dict   = map_primers_smalt( target_id, primer3_results, target_chrom, target_start - target_flank, target_end+ target_flank)
     primer_dict   = primer_design.blast.map_primers( target_id, primer3_results, target_chrom, target_start - target_flank, target_end+ target_flank)
-#    pp.pprint( primer_dict )
-    
+#    exit()
 
-
-#    best_fwd_primer, best_rev_primer = primer_design.analysis.pick_best_primers(primer_dict, target_chrom, target_start, target_end)
     (mapped_primer_strings, mapped_primer_colours) = primer_design.format.make_mapped_primer_strings( target_sequence, primer_dict)
+
+    if ( exon_string is not None ):
+        mapped_primer_strings.insert(0, exon_string)
+        mapped_primer_colours.insert(0, exon_colours)
 
     ePCR_products = primer_design.analysis.digital_PCR( primer_dict )
     (best_fwd_primer, best_rev_primer, size) = primer_design.analysis.best_product( ePCR_products )
@@ -129,23 +136,11 @@ def main():
         primer_dict[ primer][ 'MULTIPLE_MAPPINGS' ] = ", ".join( multiple_mappings[ primer ])
 
 
-#    pp.pprint( mapped_primer_strings )
-#    pp.pprint( mapped_primer_colours )
-
-
-
-    if (  args.website_output ):
-
-        lines = primer_design.format.tabbed_primer_data(target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
-
-        primer_design.core.print_to_file_or_stdout( lines )
-
-    elif (  args.text_output ):
+    if (  args.text_output ):
         lines  = primer_design.format.pretty_primer_data( primer_dict, target_chrom, target_start, target_end )
         lines += primer_design.format.pretty_mappings( target_sequence, tagged_region, mapped_primer_strings, target_start - primer_design.config.FLANK)
-        primer_design.format.pretty_primer_data("%s.txt" % target_filename, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
+#        primer_design.format.pretty_primer_data("%s.txt" % target_filename, target_chrom, target_start, target_end, primer_dict, best_fwd_primer, best_rev_primer )
         print "\n".join(lines)
-        exit()
 
     else:
         target_filename = "%s.pdf" % target_filename

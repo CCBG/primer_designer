@@ -18,7 +18,7 @@ if ( __name__ == '__main__'):
     exit( 1 )
 
 
-def map_primers( region_id, primer3_dict, target_chrom, target_start, target_end):
+def map_primers( region_id, primer3_dict, target_chrom, target_start, target_end, max_hits=None):
     """
     Maps primers to the reference using smalt to check where they map.
     
@@ -33,8 +33,7 @@ def map_primers( region_id, primer3_dict, target_chrom, target_start, target_end
 
     res = dict()
 
-    primers_file = region_id + "_p3seq.fasta"
-
+    primers_file = core.tmpfilename(path = 'tmp/', postfix='_p3.fasta')
     core.add_new_tmp_file( primers_file )
 
     with open( primers_file, 'w+') as primerfasta:
@@ -72,16 +71,19 @@ def map_primers( region_id, primer3_dict, target_chrom, target_start, target_end
 
         primerfasta.close()
 
-    blastn_results = region_id + ".blastn"
+    blastn_results = core.tmpfilename(path = 'tmp/', postfix='.blastn')
 #    pp.pprint( res )
     core.add_new_tmp_file( blastn_results )
 
 #    cmd = SMALT + " map  -d -1 /refs/human_1kg/human_g1k_v37 " + primers_file + "> " + smalt_results + " 2> /dev/null"
 
-    cmd = "{blastn} -db {blast_db}  -max_target_seqs 500 -word_size 7 -outfmt 7 -query {query} -out {outfile}".format(blastn   = config.BLASTN, 
+    cmd = "{blastn} -db {blast_db}   -word_size 7 -outfmt 7 -query {query} -out {outfile}".format(blastn   = config.BLASTN, 
                                                                                                 blast_db = config.BLAST_DB, 
                                                                                                 query    = primers_file,
                                                                                                 outfile  = blastn_results)
+
+    if max_hits is not None:
+        cmd += " -max_target_seqs {}".format(  max_hits  )
 
     core.verbose_print( cmd, 4)
     subprocess.call(cmd, shell=True)
@@ -184,3 +186,108 @@ def map_primers( region_id, primer3_dict, target_chrom, target_start, target_end
 
     return res
 
+
+
+
+def map_sequences( infile = None, perfect_only = 0 ):
+
+    if infile is None:
+        print "Infile is reqired!"
+        exit()
+
+    tmpfile = core.tmpfilename(path="/tmp/", postfix=".blastn")
+    core.add_new_tmp_file( tmpfile )
+
+    cmd = "{blastn} -db {blast_db} -outfmt '7 qacc sacc qlen pident length mismatch gapopen qstart qend sstart send evalue  bitscore'  -word_size 7 -max_hsps 10 -max_target_seqs 4 -query {query} -out {outfile}".format(blastn   = config.BLASTN, 
+                                                                                                blast_db = config.BLAST_DB, 
+                                                                                                query    = infile,
+                                                                                                outfile  = tmpfile)
+    print cmd
+    subprocess.call(cmd, shell=True)
+
+    QACC = 0
+    SACC = 1 
+    QLEN =2 
+    PIDENT = 3 
+    LENGTH = 4 
+    MISMATCH = 5 
+    GAPOPEN = 6 
+    QSTART = 7 
+    QEND = 8  
+    SSTART = 9 
+    SEND  = 10 
+    EVALUE = 11
+    BITSCORE = 12
+
+
+    match = {}
+    smalt_report = []
+    query_region = []
+
+    res = {}
+    with open(tmpfile, 'rU') as blastn_output:
+
+        for line in blastn_output:
+        
+            if (line.startswith("#")):
+                continue
+
+            print line
+            
+            line = line.rstrip("\n")
+            fields = line.split("\t")
+        
+            match_id        = fields[ QACC ] 
+        
+            match_chrom     = fields[ SACC ]
+            match_pos       = int(fields[ SSTART ])
+            qstart          = int(fields[ QSTART ])
+
+        
+            seq_length      = int( fields[ QLEN ])
+            match_length    = int( fields[ LENGTH ])
+            match_perc      = float( fields[ PIDENT ])
+
+            mismatch_bases  = int( fields[ MISMATCH ])
+
+            if ( seq_length != match_length ):
+                continue
+
+            if ( perfect_only and match_perc != 100.00):
+                continue
+            
+            match_gaps      = int( fields[ GAPOPEN ])
+
+            if ( match_gaps ):
+                continue 
+
+            match_strand    = "plus"
+            if ( int( fields[ SSTART ] ) > int( fields[ SEND ])):
+                match_strand    = "minus"
+                match_pos       = int(fields[ SEND ])
+
+
+            if ( qstart ):
+                match_pos - qstart
+
+
+            if match_id not in res:
+                res[ match_id ] = {}
+                res[ match_id ][ 'CHR' ]   = []
+                res[ match_id ][ 'POS' ]   = []
+                res[ match_id ][ 'STRAND'] = []
+                res[ match_id ][ 'QUAL'] = []
+
+            res[ match_id ][ 'CHR' ].append( match_chrom )
+            res[ match_id ][ 'POS' ].append( match_pos )
+            res[ match_id ][ 'STRAND'].append( match_strand )
+            res[ match_id ][ 'QUAL'].append( "{}/{}".format( seq_length, seq_length - match_length + mismatch_bases ) )
+
+
+
+
+    return res
+
+
+    
+    

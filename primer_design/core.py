@@ -8,6 +8,7 @@ import shlex
 import subprocess
 import re
 import os
+import random
 
 
 sys.path.append("/software/lib/python2.7/site-packages/pysam-0.7.5-py2.7-linux-x86_64.egg")
@@ -59,9 +60,10 @@ def delete_tmp_files():
     Meant to be a clean up when running pipelines/wrapper programs
 
     """
-    for tmp_filename in tmp_files:
+    for tmp_filename in set(tmp_files):
         verbose_print( "deleting tmp file: %s " % tmp_filename, 2)
-#        os.remove( tmp_filename )
+        if ( os.path.isfile( tmp_filename )):
+            os.remove( tmp_filename )
 
 
 def add_new_tmp_file( new_file ):
@@ -70,6 +72,43 @@ def add_new_tmp_file( new_file ):
     tmp_files.append( new_file )
 
 
+def tmpfilename( path=None, postfix=None):
+    """
+    creates a random tmp file name for pipelines
+    
+    input:
+      path: if the files is to be placed in a specefic directory
+
+
+      postfix: postfix to add to the name, can be usefull when
+               creating multiple tmpfiles in a pipeline
+    
+
+    return: a filename
+    """
+
+    characters = list("abcdefghijklmnopqrstuvwxyz" +
+                      "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+                      "0123456789_")
+
+    
+
+    random.shuffle( characters )
+
+
+    filename = "".join( random.sample( characters, 12 ) )
+    
+    if ( path is not None ):
+        filename = path + "/" + filename
+
+    if (postfix is not None):
+        filename += "." + postfix
+
+    filename = re.sub(r'\.+', '.', filename)
+    filename = re.sub(r'\/+', '/', filename)
+
+    return filename
+        
 
 def set_verbose_level( new_level ):
     """ 
@@ -142,25 +181,29 @@ def align_primers_to_seq( seq, all_primers):
     primers = []
     rev_primers = []
     for primer_set in all_primers:
-        ( name, primer) = primer_set
+        primer_id = None
+        ( name, primer) = (primer_set[0], primer_set[1])
+        if ( len ( primer_set) == 3):
+            primer_id = primer_set[ 2 ]
+
 #        print primer
-        primers.append(  [name, primer] )
-        rev_primers.append( [name, revDNA( primer )])
+        primers.append(  [name, primer, primer_id] )
+        rev_primers.append( [name, revDNA( primer ), primer_id])
 
     mappings = []
 
     for i in range(0, len(seq)):
         for primer_set in primers:
-            (name, primer) = primer_set
+            (name, primer, primer_id) = primer_set
             primer_len = len(primer)
             if ("".join(seq[i:i+primer_len]) == primer ):
-                mappings.append( [name, primer, i, 0] )
+                mappings.append( [name, primer, i, config.PLUS_STRAND, primer_id] )
 
         for primer_set in rev_primers:
-            (name, primer) = primer_set
+            (name, primer, primer_id) = primer_set
             primer_len = len(primer)
             if ("".join(seq[i:i+primer_len]) == primer ):
-                mappings.append( [name, primer, i, 1] )
+                mappings.append( [name, primer, i, config.MINUS_STRAND, primer_id] )
 
     return mappings
 
@@ -192,6 +235,7 @@ def fetch_region( chrom, start, end ):
             continue 
 
         sequence += line
+
     return sequence 
 
 def fetch_known_SNPs( tabix_file, chrom, start, end):
@@ -275,9 +319,35 @@ def get_primer_seqs( primers ):
 
     primer_seqs = []
     for primer_id in sorted(primers):
-        primer_seqs.append([primer_id, primers[ primer_id ][ 'SEQ']])
+        if 'PRIMER_ID' in primers[ primer_id ]:
+            primer_seqs.append([primer_id, primers[ primer_id ][ 'SEQ'], primers[ primer_id ][ 'PRIMER_ID']])
+        else:
+            primer_seqs.append([primer_id, primers[ primer_id ][ 'SEQ']])
 
     return primer_seqs
 
 
 
+
+
+
+def align_2_seqs( seq1, seq2):
+
+
+    seq1 = list ( seq1.upper() )
+    seq2 = list ( seq2.upper() )
+
+    alignment = [" "]*len(seq1 )
+    for i, base1 in enumerate( seq1 ):
+        base2 = seq2[ i ]
+
+        
+        if ( base1 == base2):
+            alignment[ i ] = "|"
+        else:
+            alignment[ i ] = "X"
+
+#        print "{} -> {}/{} ==> '{}'".format( i, base1, base2, alignment[ i ])
+
+        
+    return "".join( alignment )

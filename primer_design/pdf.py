@@ -55,7 +55,8 @@ colours = [[255,   0,   0], # red
            [255,   0, 255], # Pink
            [0,   255, 255],
            [255, 255,   0], #Dark Green
-           [100, 255, 100]] # Yellow, crap!
+           [100, 255, 100], # Yellow, crap!
+           [  0, 153,   0]] # dark green exon (nr 7)
 
 
 def mappings(target_sequence, tagged_string, primer_strings, primer_colours, base1):
@@ -129,13 +130,15 @@ def mappings(target_sequence, tagged_string, primer_strings, primer_colours, bas
                 if ( k > len(target_sequence) - 1):
                     break
 
-                if ( primer_colour[k] >= 0 ):
+                if ( len(primer_colour) > k and primer_colour[k] >= 0 ):
 
                     c.setFillColorRGB(colours[ primer_colour[k] ][0], 
                                       colours[ primer_colour[k] ][1],
                                       colours[ primer_colour[k] ][2])
 
-                c.drawString(x_offset , top_offset, primer_string[k])
+                if (len( primer_string ) > k):
+                    c.drawString(x_offset , top_offset, primer_string[k])
+
                 x_offset += stringWidth(" ", 'mono', 8)
                 c.setFillColorRGB(0,0,0)
 
